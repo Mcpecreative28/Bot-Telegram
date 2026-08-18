@@ -1,0 +1,116 @@
+{
+  "1843391827": {
+    "id": "1843391827",
+    "name": "SUPPORT BINANCE",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788276012805
+  },
+  "8575872550": {
+    "id": "8575872550",
+    "name": "Kyno",
+    "role": "OWNER",
+    "limit": "UNLIMITED",
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "_config": {
+    "autocpu": true,
+    "autobackup": true,
+    "backupGroup": -1004438641613,
+    "getEmojiMode": false
+  },
+  "7887080279": {
+    "id": "7887080279",
+    "name": "Fikriaja",
+    "role": "PT",
+    "limit": 20,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1787265655519
+  },
+  "7459692708": {
+    "id": "7459692708",
+    "name": "Dioniczz",
+    "role": "CO-FOUNDER",
+    "limit": 60,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "7410201067": {
+    "id": "7410201067",
+    "name": "hytm",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1790311046729
+  },
+  "8180036923": {
+    "id": "8180036923",
+    "name": "someone",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "7988052195": {
+    "id": "7988052195",
+    "name": "Rull",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "8348006189": {
+    "id": "8348006189",
+    "name": "Rein",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "7516486242": {
+    "id": "7516486242",
+    "name": "phi",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "8814340004": {
+    "id": "8814340004",
+    "name": "NOXXI",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1787381857792
+  },
+  "6433326259": {
+    "id": "6433326259",
+    "name": "С Т жкдфяим",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": false,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "8683742942": {
+    "id": "8683742942",
+    "name": "WASHI",
+    "role": "FOUNDER",
+    "limit": "UNLIMITED",
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  }
+  }
