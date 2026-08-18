@@ -1,0 +1,41 @@
+module.exports = {
+    TOKEN: '8975651955:AAH_5Ump6UBdl2TDeJDHN3gMcmFuuG0tJGc',
+    GROUP_ID: '-1004412942321', // ID Grup Utama
+    ID_KYNO: "8575872550", 
+    ID_TEMAN: "7459692708", 
+
+    // Pengaturan Panel Server 1
+    DOMAIN1: 'https://16august-krstore.rzhosts.my.id',
+    PLTA1: 'rtla_m41qfYtjcyYXMpEYDnZVwOiQmv5khFi3FPcMSn4gvGp',
+    PLTC1: 'rtlc_cUU7EPms7AerK1f2ettqmNdTCedbLoghJq9443DneQk',
+    LOC1: 1,
+
+    // Pengaturan Panel Server 2
+    DOMAIN2: 'ISI_DOMAIN_SERVER_2',
+    PLTA2: 'ptla_server2',
+    PLTC2: 'ptlc_server2',
+    LOC2: 1,
+
+    // ID Egg Berdasarkan Foto
+    EGGS: {
+        "nodejs": 15,
+        "python": 16,
+        "nodejs_v2": 17,
+        "golang": 20
+    },
+
+    // Link Foto untuk Menu /start
+    MENU_MEDIA: 'https://c.termai.cc/i177/OoeE.jpg',
+
+    roleHierarchy: [
+        "USER", "RESS", "PREM", "ADP", "PT", "TK", 
+        "CEO", "SECURITY", "SVIP", "DEV",          
+        "PEMILIK", "CO-FOUNDER", "KING", "FOUNDER", "OWNER" 
+    ],
+    roleLimits: {
+        "USER": 0, "RESS": 5, "PREM": 10, "ADP": 15, "PT": 20, "TK": 25,
+        "CEO": 30, "SECURITY": 35, "SVIP": 40, "DEV": 45,
+        "PEMILIK": 50, "CO-FOUNDER": 60, "KING": 100, 
+        "FOUNDER": "UNLIMITED", "OWNER": "UNLIMITED"
+    }
+};
