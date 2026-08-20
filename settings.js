@@ -5,9 +5,9 @@ module.exports = {
     ID_TEMAN: "7459692708", 
 
     // Pengaturan Panel Server 1
-    DOMAIN1: 'https://yatimawoakowkpanel1653.ymzpterodactyl.biz.id/',
-    PLTA1: 'ptla_s5AsIDzEWs7hwhVtRYJRAmaXAvo3HC3MCbA4oB8Lxkf',
-    PLTC1: 'ptlc_fAkegNHeS6JESNJQXHusi4aDLfN0caCiMASY4ROcQsH',
+    DOMAIN1: 'https://20august-krstorees-premium.rzhosts.my.id',
+    PLTA1: 'rtla_58NCtmPNJtolBbkCNly9qUopdoZlRUYXprKuHl1ZJPM',
+    PLTC1: 'rtlc_ZRWhj6LwZzuOKCTPeuVVkZ1kbv9oH1ji1ehE5FIvAwV',
     LOC1: 1,
 
     // Pengaturan Panel Server 2
