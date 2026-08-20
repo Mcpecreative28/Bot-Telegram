@@ -93,7 +93,7 @@ module.exports = (bot, readDB, writeDB) => {
                 
                 const pUsername = session.panelUsername.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 8) + Math.floor(Math.random() * 100);
                 const pPassword = Math.random().toString(36).slice(-8) + "A1!";
-                const email = `${pUsername}@buyer.zyrodevv`;
+                const email = `${pUsername}@buyer.krstore`;
 
                 const uReq = await axios.post(`${targetDomain}/api/application/users`, { "email": email, "username": pUsername, "first_name": session.userName, "last_name": "User", "password": pPassword }, pteroConfigApp);
                 const pteroId = uReq.data.attributes.id; 
