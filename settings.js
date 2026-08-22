@@ -11,9 +11,9 @@ module.exports = {
     LOC1: 1,
 
     // Pengaturan Panel Server 2
-    DOMAIN2: 'ISI_DOMAIN_SERVER_2',
-    PLTA2: 'ptla_server2',
-    PLTC2: 'ptlc_server2',
+    DOMAIN2: '20august-krstore-premiumv2.pterocloud.my.id',
+    PLTA2: 'rtla_Driyg6VeCxBmtI3EDSRnxh4CChn65vSNcwYyzCouMlV',
+    PLTC2: 'rtlc_X5vZbHLTw4FzWUN9iTXosEd8gMxgmzgMH7JdexduGLx',
     LOC2: 1,
 
     // ID Egg Berdasarkan Foto
