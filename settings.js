@@ -1,5 +1,5 @@
 module.exports = {
-    TOKEN: '8322981792:AAF4PKsGGLAhI5q9kgHtx2XZgZrKece33hc',
+    TOKEN: '8859789043:AAFExnSjUwXOW5dcng2winjQKyQxqtnFg_Y',
     GROUP_ID: '-1004412942321', // ID Grup Utama
     ID_KYNO: "8575872550", 
     ID_TEMAN: "7459692708", 
