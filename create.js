@@ -4,11 +4,12 @@ const axios = require('axios');
 const moment = require('moment-timezone');
 
 const userSessions = new Map();
+const formatUrl = (url) => url.startsWith('http') ? url : 'https://' + url;
 
 module.exports = (bot, readDB, writeDB) => {
     bot.onText(/^\/(1gb|2gb|3gb|4gb|5gb|6gb|7gb|8gb|9gb|10gb|unli)(?:\s+(.+))?/, async (msg, match) => {
         let db = readDB();
-        if (db['_config'] && db['_config'].getEmojiMode) return bot.sendMessage(msg.chat.id, `<blockquote>${e.warn} <b>MAINTENANCE</b>\nSistem Pembuatan Panel sedang dimatikan sementara oleh Owner.</blockquote>`, {parse_mode: 'HTML'});
+        if (db['_config'] && db['_config'].getEmojiMode) return bot.sendMessage(msg.chat.id, `<blockquote>${e.warn} <b>MAINTENANCE</b>\nSistem Pembuatan Panel dimatikan sementara oleh Owner.</blockquote>`, {parse_mode: 'HTML'});
 
         const chatId = msg.chat.id;
         const userId = msg.from.id.toString();
@@ -23,8 +24,13 @@ module.exports = (bot, readDB, writeDB) => {
         if (user.limit !== "UNLIMITED" && user.limit <= 0) return bot.sendMessage(chatId, `<blockquote>${e.error} Limit pembuatan panel kamu habis!</blockquote>`, {parse_mode: 'HTML'});
 
         const text = `<blockquote><b>${e.server} PILIH SERVER</b>\n${e.block_mid} Paket: <b>${command.toUpperCase()}</b>\n${e.block_end} User: ${panelUsername}</blockquote>`;
-        const buttons = [[{ text: '⛁ 𝗦𝗲𝗿𝘃𝗲𝗿 𝟭', callback_data: `srv_1_${userId}` }, { text: '⛁ 𝗦𝗲𝗿𝘃𝗲𝗿 𝟮', callback_data: `srv_2_${userId}` }]];
+        
+        let srvButtons = [];
+        if (settings.DOMAIN1 && !settings.DOMAIN1.includes('ISI_DOMAIN')) srvButtons.push({ text: '⛁ 𝗦𝗲𝗿𝘃𝗲𝗿 𝟭', callback_data: `srv_1_${userId}` });
+        if (settings.DOMAIN2 && !settings.DOMAIN2.includes('ISI_DOMAIN')) srvButtons.push({ text: '⛁ 𝗦𝗲𝗿𝘃𝗲𝗿 𝟮', callback_data: `srv_2_${userId}` });
+        if (settings.DOMAIN3 && !settings.DOMAIN3.includes('ISI_DOMAIN')) srvButtons.push({ text: '⛁ 𝗦𝗲𝗿𝘃𝗲𝗿 𝟯', callback_data: `srv_3_${userId}` });
 
+        const buttons = [srvButtons];
         const sentMsg = await bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons }});
         userSessions.set(sentMsg.message_id.toString(), { command, panelUsername, userName: msg.from.first_name, usernameTg: msg.from.username ? `@${msg.from.username}` : msg.from.first_name });
     });
@@ -84,16 +90,19 @@ module.exports = (bot, readDB, writeDB) => {
             const loadingText = `<blockquote><b>${e.loading} MEMBUAT PANEL...</b>\n${e.block_mid} Server: S${session.serverChoice}\n${e.block_mid} Nama: ${session.panelUsername}\n${e.block_mid} Egg: ${envConfig.name}\n${e.block_end} <i>Deploying, mohon tunggu...</i></blockquote>`;
             await bot.editMessageText(loadingText, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' });
 
-            let targetDomain = session.serverChoice === '1' ? settings.DOMAIN1 : settings.DOMAIN2;
-            let targetPlta = session.serverChoice === '1' ? settings.PLTA1 : settings.PLTA2;
-            let targetLoc = session.serverChoice === '1' ? settings.LOC1 : settings.LOC2;
+            let targetDomain, targetPlta, targetLoc;
+            if (session.serverChoice === '1') { targetDomain = settings.DOMAIN1; targetPlta = settings.PLTA1; targetLoc = settings.LOC1; }
+            else if (session.serverChoice === '2') { targetDomain = settings.DOMAIN2; targetPlta = settings.PLTA2; targetLoc = settings.LOC2; }
+            else { targetDomain = settings.DOMAIN3; targetPlta = settings.PLTA3; targetLoc = settings.LOC3; }
+
+            targetDomain = formatUrl(targetDomain);
 
             try {
                 const pteroConfigApp = { headers: { 'Authorization': `Bearer ${targetPlta}`, 'Content-Type': 'application/json', 'Accept': 'application/json' }};
                 
                 const pUsername = session.panelUsername.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 8) + Math.floor(Math.random() * 100);
                 const pPassword = Math.random().toString(36).slice(-8) + "A1!";
-                const email = `${pUsername}@buyer.krstore`;
+                const email = `${pUsername}@buyer.zyrodevv`;
 
                 const uReq = await axios.post(`${targetDomain}/api/application/users`, { "email": email, "username": pUsername, "first_name": session.userName, "last_name": "User", "password": pPassword }, pteroConfigApp);
                 const pteroId = uReq.data.attributes.id; 
@@ -123,11 +132,11 @@ module.exports = (bot, readDB, writeDB) => {
                 bot.sendMessage(ownerId, dataPM, { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } }).catch(()=>{});
 
             } catch (error) {
-                let errDetail = "Cek API Key Pterodactyl.";
+                let errDetail = "Cek API Key & Konfigurasi Server.";
                 if (error.response && error.response.data && error.response.data.errors) {
                     errDetail = JSON.stringify(error.response.data.errors[0].detail || error.response.data.errors[0].code);
                 }
-                bot.editMessageText(`<blockquote>${e.error} <b>S Y S T E M  E R R O R</b>\n\n<code>${errDetail}</code></blockquote>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' });
+                bot.editMessageText(`<blockquote>${e.error} <b>S Y S T E M  E R R O R</b>\n\nGagal memproses panel:\n<code>${errDetail}</code></blockquote>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' });
                 if (user.limit !== "UNLIMITED") { user.limit += 1; writeDB(db); }
             }
         }

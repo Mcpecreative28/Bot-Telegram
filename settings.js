@@ -10,11 +10,17 @@ module.exports = {
     PLTC1: 'rtlc_ZRWhj6LwZzuOKCTPeuVVkZ1kbv9oH1ji1ehE5FIvAwV',
     LOC1: 1,
 
-    // Pengaturan Panel Server 2
+    // Pengaturan Panel Server 2 (Bot kini akan auto-tambah https://)
     DOMAIN2: '20august-krstore-premiumv2.pterocloud.my.id',
     PLTA2: 'rtla_Driyg6VeCxBmtI3EDSRnxh4CChn65vSNcwYyzCouMlV',
     PLTC2: 'rtlc_X5vZbHLTw4FzWUN9iTXosEd8gMxgmzgMH7JdexduGLx',
     LOC2: 1,
+
+    // Pengaturan Panel Server 3 (Jika kosong biarkan ISI_DOMAIN)
+    DOMAIN3: 'ISI_DOMAIN_SERVER_3',
+    PLTA3: 'ptla_server3',
+    PLTC3: 'ptlc_server3',
+    LOC3: 1,
 
     // ID Egg Berdasarkan Foto
     EGGS: {
@@ -24,7 +30,6 @@ module.exports = {
         "golang": 20
     },
 
-    // Link Foto untuk Menu /start
     MENU_MEDIA: 'https://c.termai.cc/i177/OoeE.jpg',
 
     roleHierarchy: [
