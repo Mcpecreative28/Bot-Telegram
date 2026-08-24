@@ -1,5 +1,11 @@
 const settings = require('./settings');
+const e = require('./emojis');
 const axios = require('axios');
+
+const checkAccess = (msg) => {
+    const isOwner = msg.from.id.toString() === settings.ID_KYNO || msg.from.id.toString() === settings.ID_TEMAN;
+    return isOwner || msg.chat.id.toString() === settings.GROUP_ID;
+};
 
 module.exports = (bot) => {
     bot.on('message', async (msg) => {
@@ -16,7 +22,7 @@ module.exports = (bot) => {
 
         if (!isAdmin && linkRegex.test(text)) {
             bot.deleteMessage(chatId, msg.message_id).catch(() => {});
-            const warnMsg = await bot.sendMessage(chatId, `<blockquote><b>[!] PERINGATAN</b>\n<a href="tg://user?id=${userId}">${msg.from.first_name}</a>, kamu dilarang mengirim link!</blockquote>`, {parse_mode: 'HTML'});
+            const warnMsg = await bot.sendMessage(chatId, `<blockquote><b>${e.warn} PERINGATAN</b>\n<a href="tg://user?id=${userId}">${msg.from.first_name}</a>, kamu dilarang mengirim link!</blockquote>`, {parse_mode: 'HTML'});
             setTimeout(() => bot.deleteMessage(chatId, warnMsg.message_id).catch(() => {}), 5000);
         }
     });
@@ -29,7 +35,7 @@ module.exports = (bot) => {
         
         if (!isAdmin || !msg.reply_to_message) return;
         bot.banChatMember(msg.chat.id, msg.reply_to_message.from.id).then(() => {
-            bot.sendMessage(msg.chat.id, `<blockquote>[✓] Member dikeluarkan.</blockquote>`, {parse_mode: 'HTML'});
+            bot.sendMessage(msg.chat.id, `<blockquote>${e.succes} Member dikeluarkan.</blockquote>`, {parse_mode: 'HTML'});
         }).catch(() => {});
     });
 
@@ -41,7 +47,7 @@ module.exports = (bot) => {
         
         if (!isAdmin || !msg.reply_to_message) return;
         bot.restrictChatMember(msg.chat.id, msg.reply_to_message.from.id, { can_send_messages: false }).then(() => {
-            bot.sendMessage(msg.chat.id, `<blockquote>[✓] Member dibisukan.</blockquote>`, {parse_mode: 'HTML'});
+            bot.sendMessage(msg.chat.id, `<blockquote>${e.succes} Member dibisukan.</blockquote>`, {parse_mode: 'HTML'});
         }).catch(() => {});
     });
 
@@ -53,26 +59,28 @@ module.exports = (bot) => {
         
         if (!isAdmin || !msg.reply_to_message) return;
         bot.restrictChatMember(msg.chat.id, msg.reply_to_message.from.id, { can_send_messages: true, can_send_media_messages: true, can_send_other_messages: true, can_add_web_page_previews: true }).then(() => {
-            bot.sendMessage(msg.chat.id, `<blockquote>[✓] Suara dipulihkan.</blockquote>`, {parse_mode: 'HTML'});
+            bot.sendMessage(msg.chat.id, `<blockquote>${e.succes} Suara dipulihkan.</blockquote>`, {parse_mode: 'HTML'});
         }).catch(() => {});
     });
 
     bot.onText(/\/tourl/, async (msg) => {
-        if (!msg.reply_to_message || !msg.reply_to_message.photo) return bot.sendMessage(msg.chat.id, `<blockquote>[×] Reply sebuah foto!</blockquote>`, {parse_mode: 'HTML'});
+        if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup.</blockquote>`, {parse_mode: 'HTML'});
+        if (!msg.reply_to_message || !msg.reply_to_message.photo) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Reply sebuah foto!</blockquote>`, {parse_mode: 'HTML'});
         const fileId = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1].file_id;
         const fileLink = await bot.getFileLink(fileId);
-        bot.sendMessage(msg.chat.id, `<blockquote><b>❖ UPLOAD BERHASIL</b>\nURL: <code>${fileLink}</code></blockquote>`, {parse_mode: 'HTML'});
+        bot.sendMessage(msg.chat.id, `<blockquote><b>${e.cloud} UPLOAD BERHASIL</b>\nURL: <code>${fileLink}</code></blockquote>`, {parse_mode: 'HTML'});
     });
 
     bot.onText(/\/tiktok (.+)/, async (msg, match) => {
+        if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup.</blockquote>`, {parse_mode: 'HTML'});
         const url = match[1];
-        const waitMsg = await bot.sendMessage(msg.chat.id, `<blockquote>[⏳] Mendownload TikTok...</blockquote>`, {parse_mode: 'HTML'});
+        const waitMsg = await bot.sendMessage(msg.chat.id, `<blockquote>${e.loading} Mendownload TikTok...</blockquote>`, {parse_mode: 'HTML'});
         try {
             const res = await axios.post('https://www.tikwm.com/api/', { url });
-            await bot.sendVideo(msg.chat.id, res.data.data.play, { caption: `<blockquote>[✓] Download Selesai!</blockquote>`, parse_mode: 'HTML' });
+            await bot.sendVideo(msg.chat.id, res.data.data.play, { caption: `<blockquote>${e.succes} Download Selesai!</blockquote>`, parse_mode: 'HTML' });
             bot.deleteMessage(msg.chat.id, waitMsg.message_id);
-        } catch(e) {
-            bot.editMessageText(`<blockquote>[×] Gagal download.</blockquote>`, {chat_id: msg.chat.id, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        } catch(err) {
+            bot.editMessageText(`<blockquote>${e.error} Gagal download.</blockquote>`, {chat_id: msg.chat.id, message_id: waitMsg.message_id, parse_mode: 'HTML'});
         }
     });
 };

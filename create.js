@@ -6,8 +6,15 @@ const moment = require('moment-timezone');
 const userSessions = new Map();
 const formatUrl = (url) => url.startsWith('http') ? url : 'https://' + url;
 
+const checkAccess = (msg) => {
+    const isOwner = msg.from.id.toString() === settings.ID_KYNO || msg.from.id.toString() === settings.ID_TEMAN;
+    return isOwner || msg.chat.id.toString() === settings.GROUP_ID;
+};
+
 module.exports = (bot, readDB, writeDB) => {
     bot.onText(/^\/(1gb|2gb|3gb|4gb|5gb|6gb|7gb|8gb|9gb|10gb|unli)(?:\s+(.+))?/, async (msg, match) => {
+        if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses Ditolak!\nPerintah ini hanya dapat digunakan di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
+
         let db = readDB();
         if (db['_config'] && db['_config'].getEmojiMode) return bot.sendMessage(msg.chat.id, `<blockquote>${e.warn} <b>MAINTENANCE</b>\nSistem Pembuatan Panel dimatikan sementara oleh Owner.</blockquote>`, {parse_mode: 'HTML'});
 
@@ -102,7 +109,7 @@ module.exports = (bot, readDB, writeDB) => {
                 
                 const pUsername = session.panelUsername.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().substring(0, 8) + Math.floor(Math.random() * 100);
                 const pPassword = Math.random().toString(36).slice(-8) + "A1!";
-                const email = `${pUsername}@buyer.zyrodevv`;
+                const email = `${pUsername}@buyer.krstore`;
 
                 const uReq = await axios.post(`${targetDomain}/api/application/users`, { "email": email, "username": pUsername, "first_name": session.userName, "last_name": "User", "password": pPassword }, pteroConfigApp);
                 const pteroId = uReq.data.attributes.id; 
@@ -122,7 +129,7 @@ module.exports = (bot, readDB, writeDB) => {
 
                 let limitText = user.limit === "UNLIMITED" ? "Unlimited" : `${user.limit}/${settings.roleLimits[user.role]}`;
 
-                const notaGroup = `<b>${e.succes} PANEL BERHASIL DIBUAT</b>\n\n<blockquote><b>${e.tag} NOTA CREATE PANEL</b>\n${e.block_mid} Tanggal: ${moment().tz("Asia/Jakarta").format("DD MMMM YYYY")}\n${e.block_mid} Jenis: ${session.command.toUpperCase()}\n${e.block_mid} Egg: ${envConfig.name}\n${e.block_mid} Server: S${session.serverChoice}\n${e.block_mid} User: ${pUsername}\n${e.block_mid} ID Panel: ${serverId}\n${e.block_mid} Sisa Limit: <b>${limitText}</b>\n${e.block_end} Pembuat: <a href="tg://user?id=${ownerId}">${session.usernameTg}</a></blockquote>\n<i>Data login sudah dikirim ke user di atas.</i>`;
+                const notaGroup = `<b>${e.succes} PANEL BERHASIL DIBUAT</b>\n\n<blockquote><b>${e.tag} NOTA CREATE PANEL</b>\n${e.block_mid} Tanggal: ${moment().tz("Asia/Jakarta").format("DD MMMM YYYY")}\n${e.block_mid} Jenis: ${session.command.toUpperCase()}\n${e.block_mid} Egg: ${envConfig.name}\n${e.block_mid} Server: S${session.serverChoice}\n${e.block_mid} User: ${pUsername}\n${e.block_mid} ID Panel: ${serverId}\n${e.block_mid} Sisa Limit: <b>${limitText}</b>\n${e.block_end} Pembuat: <a href="tg://user?id=${ownerId}">${session.usernameTg}</a></blockquote>\n<i>Data login sudah dikirim ke private chat.</i>`;
 
                 const dataPM = `<b>${e.lock} SUKSES CREATED PANEL!</b>\n\n<blockquote><b>${e.user} DATA PANEL</b>\n${e.block_mid} Name: ${pUsername}\n${e.block_mid} Email: ${email}\n${e.block_mid} ID Panel: ${serverId}\n${e.block_mid} Server: S${session.serverChoice}\n${e.block_mid} Paket: ${session.command.toUpperCase()}\n${e.block_end} Egg: ${envConfig.name}</blockquote>\n\n<blockquote><b>${e.star} AKUN PANEL</b>\n${e.block_mid} Username: <code>${pUsername}</code>\n${e.block_mid} Password: <code>${pPassword}</code>\n${e.block_end} Login: <a href="${targetDomain}">${targetDomain}</a></blockquote>\n\n<blockquote><b>${e.warn} RULES PANEL</b>\n${e.block_mid} Sensor domain\n${e.block_mid} No DDOS / Share Free\n${e.block_end} Garansi sesuai ketentuan store</blockquote>`;
 
@@ -136,7 +143,7 @@ module.exports = (bot, readDB, writeDB) => {
                 if (error.response && error.response.data && error.response.data.errors) {
                     errDetail = JSON.stringify(error.response.data.errors[0].detail || error.response.data.errors[0].code);
                 }
-                bot.editMessageText(`<blockquote>${e.error} <b>S Y S T E M  E R R O R</b>\n\nGagal memproses panel:\n<code>${errDetail}</code></blockquote>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' });
+                bot.editMessageText(`<blockquote>${e.error} <b>S Y S T E M  E R R O R</b>\n\n<code>${errDetail}</code></blockquote>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML' });
                 if (user.limit !== "UNLIMITED") { user.limit += 1; writeDB(db); }
             }
         }

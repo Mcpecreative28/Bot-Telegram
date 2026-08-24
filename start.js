@@ -1,6 +1,11 @@
 const settings = require('./settings');
 const e = require('./emojis');
 
+const checkAccess = (msg) => {
+    const isOwner = msg.from.id.toString() === settings.ID_KYNO || msg.from.id.toString() === settings.ID_TEMAN;
+    return isOwner || msg.chat.id.toString() === settings.GROUP_ID;
+};
+
 module.exports = (bot, readDB, writeDB) => {
     const getRoleAccessText = (userRole) => {
         let text = `<blockquote><b>${e.user} ROLE ACCESS</b>\n`;
@@ -54,6 +59,8 @@ module.exports = (bot, readDB, writeDB) => {
     });
 
     bot.onText(/\/info/, (msg) => {
+        if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses Ditolak!\nPerintah ini hanya dapat digunakan di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
+
         const chatId = msg.chat.id;
         const userId = msg.from.id.toString();
         let db = readDB();

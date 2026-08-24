@@ -20,8 +20,16 @@ const getActiveServers = () => {
 module.exports = (bot, readDB, writeDB) => {
     const isOwner = (id) => id === settings.ID_KYNO || id === settings.ID_TEMAN;
 
-    bot.onText(/^\/cekidch(?:\s+.*)?$/, (msg) => {
+    bot.onText(/^\/cekidch(?:\s+(.*))?$/, (msg, match) => {
         if (!isOwner(msg.from.id.toString())) return;
+        let param = match[1];
+
+        // Ekstraksi ID Channel WhatsApp
+        if (param && param.includes('whatsapp.com/channel/')) {
+            let waId = param.split('whatsapp.com/channel/')[1].split('/')[0].split('?')[0];
+            return bot.sendMessage(msg.chat.id, `<blockquote><b>${e.gear} WA CHANNEL DETECTED</b>\n\n${e.block_mid} <b>Link:</b> ${param}\n${e.block_end} <b>ID Channel:</b> <code>${waId}</code></blockquote>`, {parse_mode: 'HTML'});
+        }
+        
         let idToCheck = msg.chat.id;
         let typeToCheck = msg.chat.type;
         let titleToCheck = msg.chat.title || msg.chat.first_name || "Unknown";
@@ -30,7 +38,7 @@ module.exports = (bot, readDB, writeDB) => {
             typeToCheck = msg.forward_from_chat.type;
             titleToCheck = msg.forward_from_chat.title || "Unknown Channel";
         }
-        bot.sendMessage(msg.chat.id, `<blockquote><b>${e.gear} INFORMASI ID DITEMUKAN</b>\n\n${e.block_mid} <b>Nama:</b> ${titleToCheck}\n${e.block_mid} <b>Tipe:</b> ${typeToCheck}\n${e.block_end} <b>ID Chat:</b> <code>${idToCheck}</code></blockquote>\n<i>*Jika me-forward pesan, ID yang muncul adalah ID asalnya.</i>`, {parse_mode: 'HTML'});
+        bot.sendMessage(msg.chat.id, `<blockquote><b>${e.gear} TG CHAT DETECTED</b>\n\n${e.block_mid} <b>Nama:</b> ${titleToCheck}\n${e.block_mid} <b>Tipe:</b> ${typeToCheck}\n${e.block_end} <b>ID Chat:</b> <code>${idToCheck}</code></blockquote>\n<i>*Jika me-forward pesan, ID yang muncul adalah ID asalnya.</i>`, {parse_mode: 'HTML'});
     });
 
     bot.onText(/^\/ping(?:\s+.*)?$/, async (msg) => {
