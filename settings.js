@@ -27,8 +27,8 @@ module.exports = {
     // Cari IP Proxy Indonesia (HTTP) di internet
     // Kosongkan jika tidak memakai proxy
     // ==========================================
-    PROXY_HOST: '43.218.124.29', // Contoh: '103.144.174.45'
-    PROXY_PORT: '12213', // Contoh: '8080'
+    PROXY_HOST: '8.215.25.3', // Contoh: '103.144.174.45'
+    PROXY_PORT: '2081', // Contoh: '8080'
 
     // ID Egg Berdasarkan Foto
     EGGS: {

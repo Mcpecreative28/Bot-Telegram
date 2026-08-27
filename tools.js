@@ -16,8 +16,8 @@ const HEADERS = {
 const ampremCooldowns = new Map();
 const ampremState = new Map();
 const COOLDOWN_TIME = 60000;
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Generator String Acak untuk Auto-Register Ryezen
 function generateRandomString(length) {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
@@ -25,51 +25,102 @@ function generateRandomString(length) {
     return result;
 }
 
-// TRIK NINJA: Membuat Akun Ryezen Baru Otomatis agar mendapat Kredit Gratis
+// Custom request handler untuk mengatasi Cloudflare 503 / 502
+async function fetchWithRetry(url, data, retries = 3) {
+    let lastErr;
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const res = await axios.post(url, data, { headers: HEADERS, timeout: 15000 });
+            return res;
+        } catch (err) {
+            lastErr = err;
+            if (err.response && (err.response.status === 503 || err.response.status === 502 || err.response.status === 429)) {
+                await delay(3000); 
+                continue;
+            }
+            if (err.response && err.response.status === 400) throw err; 
+            await delay(2000);
+        }
+    }
+    throw lastErr;
+}
+
+// ================= ENGINE 1: RYEZEN STORE =================
 async function getRyezenSession() {
-    const user = `kyno_${generateRandomString(8)}`;
-    const pass = `pws${generateRandomString(10)}`;
+    const user = `kn_${generateRandomString(6)}`;
+    const pass = `pws${generateRandomString(8)}`;
     try {
-        await axios.post('https://www.ryezenstore.online/api/auth/register', { username: user, password: pass }, { headers: HEADERS });
-        const loginRes = await axios.post('https://www.ryezenstore.online/api/auth/login', { username: user, password: pass }, { headers: HEADERS });
-        
+        await fetchWithRetry('https://www.ryezenstore.online/api/auth/register', { username: user, password: pass });
+        const loginRes = await fetchWithRetry('https://www.ryezenstore.online/api/auth/login', { username: user, password: pass });
+
         const cookies = loginRes.headers['set-cookie'];
         if (cookies && cookies.length > 0) {
             return cookies.map(c => c.split(';')[0]).join('; ');
         }
-        return null;
+        throw new Error("Sesi Cookie gagal di-ekstrak.");
     } catch (err) {
-        return null;
+        throw new Error(`Ryezen Error: ${err.response?.data?.error || err.response?.data?.message || err.message}`);
     }
 }
 
-// Eksekusi API Aktivasi Alight Motion via Ryezen
 async function activateRyezen(email, rawLink, cookie) {
     try {
-        const actRes = await axios.post('https://www.ryezenstore.online/api/am/activate', { 
-            email: email, 
-            magicLink: rawLink 
-        }, { 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Cookie': cookie,
-                'User-Agent': HEADERS['User-Agent']
-            } 
+        const actRes = await axios.post('https://www.ryezenstore.online/api/am/activate', {
+            email: email, magicLink: rawLink
+        }, {
+            headers: { 'Content-Type': 'application/json', 'Cookie': cookie, 'User-Agent': HEADERS['User-Agent'] },
+            timeout: 20000
         });
-        
-        return { success: true, message: actRes.data.message || 'Lisensi Premium Berhasil Ditambahkan!' };
+        return { success: true, message: actRes.data.message || 'Lisensi Premium Berhasil Ditambahkan via Engine 1!' };
     } catch (err) {
-        return { success: false, error: err.response?.data?.error || err.message };
+        return { success: false, error: err.response?.data?.error || err.response?.data?.message || err.message };
+    }
+}
+
+// ================= ENGINE 2: ALIGHTPRO DIRECT NATIVE =================
+async function alightMotionDirectAxios(email, rawLink) {
+    try {
+        const sessionRes = await axios.get('https://www.alightpro.my.id/api/session', {
+            headers: { 'User-Agent': HEADERS['User-Agent'], 'X-Requested-With': 'XMLHttpRequest' }, timeout: 15000
+        });
+        const sessionData = sessionRes.data;
+        const cookies = sessionRes.headers['set-cookie'] ? sessionRes.headers['set-cookie'].map(c => c.split(';')[0]).join('; ') : '';
+
+        if (!sessionData.status || !sessionData.token) throw new Error('Gagal memuat token otentikasi server.');
+
+        const prefix = `${sessionData.sessionId}:${sessionData.nonce}:${email.toLowerCase()}:verify:`;
+        let pow = Date.now().toString();
+        const difficulty = sessionData.difficulty || '0000';
+        
+        for (let i = 0; i < 500000; i++) {
+            const hash = crypto.createHash('sha256').update(prefix + i.toString()).digest('hex');
+            if (hash.startsWith(difficulty)) { pow = i.toString(); break; }
+        }
+
+        const submitRes = await axios.post('https://www.alightpro.my.id/api/alight-motion', {
+            action: 'verify', email, link: rawLink
+        }, {
+            headers: {
+                'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
+                'X-Amprem-Token': sessionData.token, 'X-Amprem-Nonce': sessionData.nonce, 'X-Amprem-Pow': pow,
+                'Cookie': cookies, 'User-Agent': HEADERS['User-Agent']
+            }
+        });
+
+        return { success: submitRes.data.status === true, message: submitRes.data.msg || 'Lisensi Berhasil Ditambahkan via Engine 2!' };
+    } catch (err) {
+        let errorMsg = err.response?.data?.msg || err.message;
+        if (errorMsg.includes("unavailable in your region")) errorMsg = "Terblokir oleh Cloudflare (Region Block).";
+        return { success: false, error: errorMsg };
     }
 }
 
 module.exports = (bot, readDB, writeDB) => {
-    // FITUR 1: TEMPMAIL
     bot.onText(/^\/tempmail$/, async (msg) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
         const chatId = msg.chat.id;
-        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MEMBUAT TEMPMAIL</b>\nSedang menyiapkan email...</blockquote>`, {parse_mode: 'HTML'});
+        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MEMBUAT TEMPMAIL</b>\nSedang menyiapkan email menggunakan API Custom...</blockquote>`, {parse_mode: 'HTML'});
         
         try {
             const mailRes = await axios.get('https://creatett-seven.vercel.app/api/tempmail/create');
@@ -93,7 +144,7 @@ module.exports = (bot, readDB, writeDB) => {
                             const emailString = JSON.stringify(m).replace(/\\/g, '');
                             const linkMatch = emailString.match(/https?:\/\/(?:[a-zA-Z0-9-]+\.)*(?:alightcreative\.com|alight\.link|alightmotion\.com)\/[^\s"'>]*/);
                             if (linkMatch) {
-                                magicLink = linkMatch[0].replace(/&/g, '&');
+                                magicLink = linkMatch[0].replace(/&amp;/g, '&').replace(/&/g, '&');
                                 break;
                             }
                         }
@@ -114,7 +165,6 @@ module.exports = (bot, readDB, writeDB) => {
         }
     });
 
-    // FITUR 2: INISIASI AMPREM (Tahap 1 - Meminta Link)
     bot.onText(/^\/amprem(?:\s+(.+))?$/, async (msg, match) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
@@ -144,7 +194,6 @@ module.exports = (bot, readDB, writeDB) => {
         bot.sendMessage(chatId, `<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Menunggu kamu mengirimkan OOB Link...\n\n<i>Kirim link Alight Motion ke chat ini sekarang.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {parse_mode: 'HTML'});
     });
 
-    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi API via Ryezen)
     bot.on('message', async (msg) => {
         const userId = msg.from.id.toString();
         if (!msg.text) return;
@@ -163,7 +212,7 @@ module.exports = (bot, readDB, writeDB) => {
             const linkMatch = text.match(/https?:\/\/(?:[a-zA-Z0-9-]+\.)*(?:alightcreative\.com|alight\.link|alightmotion\.com)\/[^\s"'>]*/);
             
             if (linkMatch) {
-                const link = linkMatch[0].replace(/&/g, '&');
+                const link = linkMatch[0].replace(/&amp;/g, '&').replace(/&/g, '&');
                 ampremState.delete(userId); 
 
                 let db = readDB();
@@ -177,32 +226,49 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 }
 
-                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Status: Menembus keamanan via Server Pusat...</blockquote>`, {parse_mode: 'HTML'});
+                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Status: Mengirim request melalui Engine 1 (Ryezen)...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
-                // Meminta cookie Ryezen baru agar mendapat kredit gratis
-                const sessionCookie = await getRyezenSession();
-                
-                if (!sessionCookie) {
-                    ampremCooldowns.delete(userId);
-                    return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES</b>\n\n${e.block_end} Detail: Server API pusat sedang sibuk atau error.</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                let isSuccess = false;
+                let finalMessage = "";
+                let debugError = "";
+
+                try {
+                    // Coba Engine 1
+                    const sessionCookie = await getRyezenSession();
+                    const res1 = await activateRyezen(state.email, link, sessionCookie);
+                    if (res1.success) {
+                        isSuccess = true;
+                        finalMessage = res1.message;
+                    } else {
+                        throw new Error(res1.error);
+                    }
+                } catch (err1) {
+                    debugError += `E1: ${err1.message} | `;
+                    bot.editMessageText(`<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_mid} Error 1: <code>${err1.message.substring(0,40)}...</code>\n${e.block_end} Status: Mengalihkan ke Engine 2 (Direct)...</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    
+                    // Coba Engine 2 (Fallback)
+                    const res2 = await alightMotionDirectAxios(state.email, link);
+                    if (res2.success) {
+                        isSuccess = true;
+                        finalMessage = res2.message;
+                    } else {
+                        debugError += `E2: ${res2.error}`;
+                    }
                 }
 
-                const result = await activateRyezen(state.email, link, sessionCookie);
-                
-                if (result.success) {
+                if (isSuccess) {
                     db = readDB(); 
                     if (db[userId].limit !== "UNLIMITED") {
                         db[userId].limit -= 1;
                         writeDB(db);
                     }
-                    
                     let limitText = db[userId].limit === "UNLIMITED" ? "Unlimited" : `${db[userId].limit}/${settings.roleLimits[db[userId].role]}`;
                     
-                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${state.email}</code>\n${e.block_mid} Status: ${result.message}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${state.email}</code>\n${e.block_mid} Info: ${finalMessage}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 } else {
                     ampremCooldowns.delete(userId); 
-                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Detail: ${result.error}</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES TOTAL</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Log: <code>${debugError}</code></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 }
             } else {
                 bot.sendMessage(state.chatId, `<blockquote>${e.error} Itu bukan link verifikasi yang valid!\nSilakan kirim link Alight Motion atau ketik <code>/cancel</code>.</blockquote>`, {parse_mode: 'HTML'});
