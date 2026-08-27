@@ -5,22 +5,30 @@ module.exports = {
     ID_TEMAN: "7459692708", 
 
     // Pengaturan Panel Server 1
-    DOMAIN1: 'https://20august-krstorees-premium.rzhosts.my.id',
-    PLTA1: 'rtla_58NCtmPNJtolBbkCNly9qUopdoZlRUYXprKuHl1ZJPM',
-    PLTC1: 'rtlc_ZRWhj6LwZzuOKCTPeuVVkZ1kbv9oH1ji1ehE5FIvAwV',
+    DOMAIN1: '',
+    PLTA1: '',
+    PLTC1: '',
     LOC1: 1,
 
-    // Pengaturan Panel Server 2 (Bot kini akan auto-tambah https://)
-    DOMAIN2: '20august-krstore-premiumv2.pterocloud.my.id',
-    PLTA2: 'rtla_Driyg6VeCxBmtI3EDSRnxh4CChn65vSNcwYyzCouMlV',
-    PLTC2: 'rtlc_X5vZbHLTw4FzWUN9iTXosEd8gMxgmzgMH7JdexduGLx',
+    // Pengaturan Panel Server 2
+    DOMAIN2: '',
+    PLTA2: '',
+    PLTC2: '',
     LOC2: 1,
 
     // Pengaturan Panel Server 3 (Jika kosong biarkan ISI_DOMAIN)
-    DOMAIN3: 'ISI_DOMAIN_SERVER_3',
-    PLTA3: 'ptla_server3',
-    PLTC3: 'ptlc_server3',
+    DOMAIN3: '',
+    PLTA3: '',
+    PLTC3: '',
     LOC3: 1,
+
+    // ==========================================
+    // SETTING PROXY (UNTUK BYPASS REGION BLOCK)
+    // Cari IP Proxy Indonesia (HTTP) di internet
+    // Kosongkan jika tidak memakai proxy
+    // ==========================================
+    PROXY_HOST: '43.218.124.29', // Contoh: '103.144.174.45'
+    PROXY_PORT: '12213', // Contoh: '8080'
 
     // ID Egg Berdasarkan Foto
     EGGS: {
