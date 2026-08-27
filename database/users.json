@@ -1,4 +1,22 @@
 {
+  "1735125606": {
+    "id": "1735125606",
+    "name": "ᴋɪɴɢ ᴠᴀʟɪᴅᴀᴛᴏʀ ./ᴍᴏʀᴛɪx❀",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": false,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "1741715377": {
+    "id": "1741715377",
+    "name": "⸸ 𝒙𝒗𝒂𝒏𝒆𝒔𝒄𝒕 𝒙𝒚𝒆𝒏𝒏𝒇𝒐𝒓𝒎𝒆𝒆 #𝒙𝒆𝒗𝒊𝒏𝒛𝒚 [REHAT]",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
   "1843391827": {
     "id": "1843391827",
     "name": "SUPPORT BINANCE",
@@ -18,7 +36,7 @@
     "expiredAt": null
   },
   "_config": {
-    "autocpu": true,
+    "autocpu": false,
     "autobackup": true,
     "backupGroup": -1004438641613,
     "getEmojiMode": false
@@ -30,7 +48,7 @@
     "limit": 20,
     "hasStartedPM": true,
     "warnings": 0,
-    "expiredAt": 1787265655519
+    "expiredAt": 1788169589950
   },
   "7459692708": {
     "id": "7459692708",
@@ -44,47 +62,47 @@
   "7410201067": {
     "id": "7410201067",
     "name": "hytm",
-    "role": "RESS",
-    "limit": 5,
+    "role": "PREM",
+    "limit": 10,
     "hasStartedPM": true,
     "warnings": 0,
-    "expiredAt": 1790311046729
+    "expiredAt": 1790848029790
   },
   "8180036923": {
     "id": "8180036923",
     "name": "someone",
-    "role": "USER",
-    "limit": 0,
+    "role": "RESS",
+    "limit": 5,
     "hasStartedPM": true,
     "warnings": 0,
-    "expiredAt": null
+    "expiredAt": 1788227404496
   },
   "7988052195": {
     "id": "7988052195",
     "name": "Rull",
-    "role": "USER",
-    "limit": 0,
+    "role": "PREM",
+    "limit": 10,
     "hasStartedPM": true,
     "warnings": 0,
-    "expiredAt": null
+    "expiredAt": 1788400171112
   },
   "8348006189": {
     "id": "8348006189",
     "name": "Rein",
-    "role": "USER",
-    "limit": 0,
+    "role": "RESS",
+    "limit": 5,
     "hasStartedPM": true,
     "warnings": 0,
-    "expiredAt": null
+    "expiredAt": 1788051618283
   },
   "7516486242": {
     "id": "7516486242",
     "name": "phi",
-    "role": "USER",
-    "limit": 0,
+    "role": "RESS",
+    "limit": 5,
     "hasStartedPM": true,
     "warnings": 0,
-    "expiredAt": null
+    "expiredAt": 1788051488143
   },
   "8814340004": {
     "id": "8814340004",
@@ -93,7 +111,7 @@
     "limit": 5,
     "hasStartedPM": true,
     "warnings": 0,
-    "expiredAt": 1787381857792
+    "expiredAt": 1788169524981
   },
   "6433326259": {
     "id": "6433326259",
@@ -112,5 +130,221 @@
     "hasStartedPM": true,
     "warnings": 0,
     "expiredAt": null
+  },
+  "8910616520": {
+    "id": "8910616520",
+    "name": "RzyyyStore",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788051453756
+  },
+  "6400374564": {
+    "id": "6400374564",
+    "name": "PAN 𝐒𝐂𝐓4𝐑",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788051426711
+  },
+  "8743786853": {
+    "id": "8743786853",
+    "name": "Ojann",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1787996374510
+  },
+  "8119863924": {
+    "id": "8119863924",
+    "name": "winzz",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1787996684319
+  },
+  "8907450407": {
+    "id": "8907450407",
+    "name": "NOV",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788051398646
+  },
+  "7071504954": {
+    "id": "7071504954",
+    "name": "L Whaaaattt",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1787891581920
+  },
+  "8884293612": {
+    "id": "8884293612",
+    "name": "─𝘃𝗮𝘆𝗻𝘇𝘇 #𝙕𝙮𝙥𝙝𝙚𝙧𝙖 ⛧",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788010440364
+  },
+  "8651614071": {
+    "id": "8651614071",
+    "name": "𝙉𝙖𝙧𝙯𝙯𝙮 𝗫𝘆𝗿𝘇",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788051366702
+  },
+  "7904503187": {
+    "id": "7904503187",
+    "name": "racun",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788018491168
+  },
+  "8645385880": {
+    "id": "8645385880",
+    "name": "JOY OFFICIAL",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788051278659
+  },
+  "7593725341": {
+    "id": "7593725341",
+    "name": "Suka",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788051307590
+  },
+  "8901293495": {
+    "id": "8901293495",
+    "name": "gaauprblm",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788055908202
+  },
+  "8984326648": {
+    "id": "8984326648",
+    "name": "Fahmi ✧ 𝐕𝐀𝐆❂𝐒 • 𝐋❂𝐒",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788056026366
+  },
+  "6481512843": {
+    "id": "6481512843",
+    "name": "🏅乂 乃ㄚᐯ乇 乂 #𝐒𝐓 #𝑇20 #MALVORNS || 𝐏𝐑!𝐌𝟑͟͟͞͞⏤",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788109670724
+  },
+  "8756132657": {
+    "id": "8756132657",
+    "name": "#noctis | Koulinz",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "8746375695": {
+    "id": "8746375695",
+    "name": "𝙎𝙚𝙤𝙣 𝙔𝙚𝙤-𝙅𝙖𝙚 𝖑𝖔𝖔𝖐𝖘𝖎𝖒",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "7780595921": {
+    "id": "7780595921",
+    "name": "ADRIAN CLOUD",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788137172259
+  },
+  "8773823648": {
+    "id": "8773823648",
+    "name": "Owner Momo Agent -X👻",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788137899036
+  },
+  "8931205417": {
+    "id": "8931205417",
+    "name": "⏤ Cong ✧",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "7591308297": {
+    "id": "7591308297",
+    "name": "WhiteRT",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "7230475412": {
+    "id": "7230475412",
+    "name": "⏤͟͟͞͞ ᶦƬ͢ˢ𝐌𝐞 ̶𝐌𝐑.𝐙𝐫𝐢𝐥𝐥𝐗𝟏؛ًٍَُّْ𝅯𝅯۪ؒؒؒؒؒؒؒؒ؛ًٍَُّْ𝅯𝅯۪ؒؒؒؒؒؒؒؒ",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "7954516739": {
+    "id": "7954516739",
+    "name": "RIZZVVIP OFFICIAL",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
+  },
+  "6821087104": {
+    "id": "6821087104",
+    "name": "Sam lutfii",
+    "role": "RESS",
+    "limit": 5,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": 1788186404360
+  },
+  "7874604144": {
+    "id": "7874604144",
+    "name": "ℙℝ𝕀𝕄𝔼 𝕃𝔼𝕏ℤ𝕐𝕃𝕌𝕂𝕊12(𝕨𝕙𝕪 𝕕𝕠 𝕪𝕠𝕦 𝕨𝕒𝕟𝕥 𝕥𝕠 𝕜𝕟𝕠𝕨 𝕞𝕖)?",
+    "role": "USER",
+    "limit": 0,
+    "hasStartedPM": true,
+    "warnings": 0,
+    "expiredAt": null
   }
-  }
+}
