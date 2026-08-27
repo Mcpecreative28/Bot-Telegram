@@ -7,49 +7,56 @@ const checkAccess = (msg) => {
     return isOwner || msg.chat.id.toString() === settings.GROUP_ID;
 };
 
-const HEADERS = {
+// ================= KONFIGURASI ENGINE =================
+const HEADERS_DAPJI = {
     'Content-Type': 'application/json',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 };
 
+const IRFAN_COOKIE = "session=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOiI4MjU3NDhiOWM3YjVkOGE1MzQ0YmNkOTRiMjE5ZmIzZSIsImVtYWlsIjoic2FuenZvbHRleEBnbWFpbC5jb20iLCJpYXQiOjE3ODc0NTU5NTcsImV4cCI6MTc4NzQ1Nzc1N30.irU5mSZMtnRPviGtgN84lwzCw0yfSBl14rdNelRb6KU; hu8935j4i9fq3hpuj9q39=true; s9ifs0idfjlwfie32dekl=0; dom3ic8zudi28v8lr6fgphwffqoz0j6c=49bf5972-bc03-4075-8a31-6e3809611ae0%3A1%3A1; sb_main_8f9c3b6727bcb73b78e7930bbd864cb6=1; dom3ic8zudi28v8lr6fgphwffqoz0j6c=01a02cad-791b-7e77-a484-6f17b8a58685; vrk4n8fqhwc3jzy7pbsmgt6dx5lha2u9=01a02cad-791b-7e77-a484-6f17b8a58685_2; sb_count_8f9c3b6727bcb73b78e7930bbd864cb6=4";
+
+const HEADERS_IRFAN = {
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+    'Referer': 'https://amprem.irfanjawa.com/dashboard/generator',
+    'Cookie': IRFAN_COOKIE,
+    'Content-Type': 'application/json'
+};
+
 const ampremCooldowns = new Map();
-const ampremState = new Map(); // Menyimpan state { email, chatId }
+const ampremState = new Map();
 const COOLDOWN_TIME = 60000;
 
-// ================= API DAPJIMOTIONPRO (ENGINE BARU) =================
-const API_URL = 'https://dapjimotionpro.my.id/api/proxy-amprem';
-
-async function sendLinkDapji(email) {
-    try {
-        const { data } = await axios.post(API_URL, {
-            action: 'send',
-            email: email
-        }, { headers: HEADERS, timeout: 15000 });
-        return { success: true, data: data };
-    } catch (err) {
-        throw new Error(err.response?.data?.message || err.response?.data || err.message);
-    }
-}
-
-async function verifyLinkDapji(email, link) {
-    try {
-        const { data } = await axios.post(API_URL, {
-            action: 'verify',
-            email: email,
-            link: link
-        }, { headers: HEADERS, timeout: 25000 });
-        
-        // Cek struktur response dari Dapji, sesuaikan jika formatnya berbeda
-        if (data.status === true || data.success === true || (data.msg && data.msg.includes("berhasil"))) {
-             return { success: true, message: data.msg || 'Lisensi Premium berhasil diterapkan!' };
-        } else {
-             return { success: false, error: data.msg || JSON.stringify(data) };
+// Alat Penerjemah Error agar tidak [object Object]
+function parseError(err) {
+    if (err.response && err.response.data) {
+        if (typeof err.response.data === 'object') {
+            return err.response.data.message || err.response.data.msg || err.response.data.error || JSON.stringify(err.response.data);
         }
-    } catch (err) {
-        return { success: false, error: err.response?.data?.message || err.response?.data || err.message };
+        return String(err.response.data);
     }
+    return err.message;
 }
-// ====================================================================
+
+// ENGINE 1: DAPJIMOTIONPRO
+async function sendLinkDapji(email) {
+    const { data } = await axios.post('https://dapjimotionpro.my.id/api/proxy-amprem', { action: 'send', email: email, password: 'rohancakep' }, { headers: HEADERS_DAPJI, timeout: 15000 });
+    return data;
+}
+async function verifyLinkDapji(email, link) {
+    const { data } = await axios.post('https://dapjimotionpro.my.id/api/proxy-amprem', { action: 'verify', email: email, link: link, password: 'rohancakep' }, { headers: HEADERS_DAPJI, timeout: 20000 });
+    return data;
+}
+
+// ENGINE 2: IRFANJAWA
+async function sendLinkIrfan(email) {
+    const { data } = await axios.post('https://amprem.irfanjawa.com/api/auth/send-magic-link', { email }, { headers: HEADERS_IRFAN, timeout: 15000 });
+    return data;
+}
+async function verifyLinkIrfan(email, link) {
+    const { data } = await axios.post('https://amprem.irfanjawa.com/api/auth/verify-magic-link', { email, magicLink: link }, { headers: HEADERS_IRFAN, timeout: 20000 });
+    return data;
+}
+// ======================================================
 
 module.exports = (bot, readDB, writeDB) => {
     // FITUR 1: TEMPMAIL
@@ -102,7 +109,7 @@ module.exports = (bot, readDB, writeDB) => {
         }
     });
 
-    // FITUR 2: INISIASI AMPREM (Tahap 1 - Memicu Link & Menunggu)
+    // FITUR 2: INISIASI AMPREM (Tahap 1 - Memicu Link)
     bot.onText(/^\/amprem(?:\s+(.+))?$/, async (msg, match) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
@@ -116,7 +123,7 @@ module.exports = (bot, readDB, writeDB) => {
         const inputArgs = match[1];
 
         if (inputArgs && inputArgs.includes('http')) {
-            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan memicu link-nya secara otomatis.</blockquote>`, {parse_mode: 'HTML'});
+            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan meminta link-nya di pesan berikutnya.</blockquote>`, {parse_mode: 'HTML'});
         }
 
         if (!inputArgs || !inputArgs.includes('@')) {
@@ -129,20 +136,35 @@ module.exports = (bot, readDB, writeDB) => {
 
         let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MENYIAPKAN SESI AMPREM</b>\n\nMeminta server untuk mengirimkan Magic Link...</blockquote>`, {parse_mode: 'HTML'});
 
-        // Memicu API Dapji untuk mengirim email verifikasi
+        let activeEngine = null;
+        let errDapji = '';
+        let errIrfan = '';
+
+        // DUAL ENGINE FIRING LOGIC
         try {
             await sendLinkDapji(email);
-        } catch (err) {
-            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\nServer menolak pengiriman link. Pastikan email valid.\nDetail: <code>${err.message}</code></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+            activeEngine = 'DAPJI';
+        } catch (err1) {
+            errDapji = parseError(err1);
+            try {
+                await sendLinkIrfan(email);
+                activeEngine = 'IRFANJAWA';
+            } catch (err2) {
+                errIrfan = parseError(err2);
+            }
         }
 
-        // Simpan Sesi ke State
-        ampremState.set(userId, { email, chatId });
+        if (!activeEngine) {
+            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\nSemua Engine Pusat Error/Mati!\n\n${e.block_mid} E1 (Dapji): <code>${errDapji}</code>\n${e.block_end} E2 (Irfan): <code>${errIrfan}</code></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        }
 
-        bot.editMessageText(`<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Link Verifikasi telah dikirim ke email tersebut!\n\n<i>Tunggu link-nya muncul dari tempmail, lalu salin dan kirimkan link tersebut ke chat ini.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        // Simpan Sesi (Tunggu user mengirim link)
+        ampremState.set(userId, { email, chatId, engine: activeEngine });
+
+        bot.editMessageText(`<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_mid} Engine: <b>${activeEngine}</b>\n${e.block_end} Status: Link telah dikirim ke email tersebut!\n\n<i>Tunggu link-nya muncul dari tempmail, lalu salin dan kirimkan link tersebut ke chat ini.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
     });
 
-    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi API via Dapji)
+    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi API)
     bot.on('message', async (msg) => {
         const userId = msg.from.id.toString();
         if (!msg.text) return;
@@ -164,6 +186,7 @@ module.exports = (bot, readDB, writeDB) => {
                 const link = linkMatch[0].replace(/&amp;/g, '&').replace(/&/g, '&');
                 
                 const userStateEmail = state.email;
+                const activeEngine = state.engine;
                 ampremState.delete(userId); 
 
                 let db = readDB();
@@ -180,10 +203,30 @@ module.exports = (bot, readDB, writeDB) => {
                 const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Menerapkan lisensi premium ke akun...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
-                // Eksekusi Activate menggunakan API Dapji
-                const actRes = await verifyLinkDapji(userStateEmail, link);
+                let isSuccess = false;
+                let finalMsg = '';
+                let finalErr = '';
 
-                if (actRes.success) {
+                try {
+                    let actRes;
+                    if (activeEngine === 'DAPJI') {
+                        actRes = await verifyLinkDapji(userStateEmail, link);
+                    } else {
+                        actRes = await verifyLinkIrfan(userStateEmail, link);
+                    }
+
+                    // Cek jika balasan sukses
+                    if (actRes.status === true || actRes.success === true || (actRes.msg && actRes.msg.includes("berhasil")) || (actRes.message && actRes.message.includes("berhasil"))) {
+                        isSuccess = true;
+                        finalMsg = actRes.msg || actRes.message || "Berhasil Diterapkan!";
+                    } else {
+                        throw new Error(parseError({ response: { data: actRes } }));
+                    }
+                } catch (err) {
+                    finalErr = parseError(err);
+                }
+
+                if (isSuccess) {
                     db = readDB(); 
                     if (db[userId].limit !== "UNLIMITED") {
                         db[userId].limit -= 1;
@@ -191,10 +234,10 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                     let limitText = db[userId].limit === "UNLIMITED" ? "Unlimited" : `${db[userId].limit}/${settings.roleLimits[db[userId].role]}`;
                     
-                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${actRes.message}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${finalMsg}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 } else {
                     ampremCooldowns.delete(userId); 
-                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: ${actRes.error}</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: <code>${finalErr}</code></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 }
             } else {
                 bot.sendMessage(state.chatId, `<blockquote>${e.error} Itu bukan link verifikasi yang valid!\nSilakan kirim link Alight Motion atau ketik <code>/cancel</code>.</blockquote>`, {parse_mode: 'HTML'});
