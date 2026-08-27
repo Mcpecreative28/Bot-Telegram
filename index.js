@@ -19,7 +19,7 @@ require('./start')(bot, readDB, writeDB);
 require('./create')(bot, readDB, writeDB);
 require('./group')(bot);
 require('./owner')(bot, readDB, writeDB);
-require('./tools')(bot); // Load Fitur Tempmail & Amprem
+require('./tools')(bot, readDB, writeDB); // <- Memasukkan DB agar sistem Limit bekerja
 
 const getActiveServers = () => {
     return [
