@@ -1,4 +1,6 @@
 const axios = require('axios');
+const crypto = require('crypto');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const settings = require('./settings');
 const e = require('./emojis');
 
@@ -7,56 +9,74 @@ const checkAccess = (msg) => {
     return isOwner || msg.chat.id.toString() === settings.GROUP_ID;
 };
 
-// ================= KONFIGURASI ENGINE =================
-const HEADERS_DAPJI = {
-    'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-};
-
-const IRFAN_COOKIE = "session=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOiI4MjU3NDhiOWM3YjVkOGE1MzQ0YmNkOTRiMjE5ZmIzZSIsImVtYWlsIjoic2FuenZvbHRleEBnbWFpbC5jb20iLCJpYXQiOjE3ODc0NTU5NTcsImV4cCI6MTc4NzQ1Nzc1N30.irU5mSZMtnRPviGtgN84lwzCw0yfSBl14rdNelRb6KU; hu8935j4i9fq3hpuj9q39=true; s9ifs0idfjlwfie32dekl=0; dom3ic8zudi28v8lr6fgphwffqoz0j6c=49bf5972-bc03-4075-8a31-6e3809611ae0%3A1%3A1; sb_main_8f9c3b6727bcb73b78e7930bbd864cb6=1; dom3ic8zudi28v8lr6fgphwffqoz0j6c=01a02cad-791b-7e77-a484-6f17b8a58685; vrk4n8fqhwc3jzy7pbsmgt6dx5lha2u9=01a02cad-791b-7e77-a484-6f17b8a58685_2; sb_count_8f9c3b6727bcb73b78e7930bbd864cb6=4";
-
-const HEADERS_IRFAN = {
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
-    'Referer': 'https://amprem.irfanjawa.com/dashboard/generator',
-    'Cookie': IRFAN_COOKIE,
-    'Content-Type': 'application/json'
-};
-
 const ampremCooldowns = new Map();
-const ampremState = new Map();
+const ampremState = new Map(); // Menyimpan state { email, chatId }
 const COOLDOWN_TIME = 60000;
 
-// Alat Penerjemah Error agar tidak [object Object]
-function parseError(err) {
-    if (err.response && err.response.data) {
-        if (typeof err.response.data === 'object') {
-            return err.response.data.message || err.response.data.msg || err.response.data.error || JSON.stringify(err.response.data);
-        }
-        return String(err.response.data);
+// ================= ENGINE TUNGGAL: ALIGHTPRO NATIVE =================
+async function alightMotionAxios(email, rawLink = null) {
+    let axiosConfig = {
+        headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': 'https://www.alightpro.my.id',
+            'Referer': 'https://www.alightpro.my.id/'
+        },
+        timeout: 25000
+    };
+
+    // Inject Proxy dari settings.js agar bisa menembus Region Block Cloudflare
+    if (settings.PROXY_HOST && settings.PROXY_PORT) {
+        const proxyUrl = `http://${settings.PROXY_HOST}:${settings.PROXY_PORT}`;
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false; 
     }
-    return err.message;
-}
 
-// ENGINE 1: DAPJIMOTIONPRO
-async function sendLinkDapji(email) {
-    const { data } = await axios.post('https://dapjimotionpro.my.id/api/proxy-amprem', { action: 'send', email: email, password: 'rohancakep' }, { headers: HEADERS_DAPJI, timeout: 15000 });
-    return data;
-}
-async function verifyLinkDapji(email, link) {
-    const { data } = await axios.post('https://dapjimotionpro.my.id/api/proxy-amprem', { action: 'verify', email: email, link: link, password: 'rohancakep' }, { headers: HEADERS_DAPJI, timeout: 20000 });
-    return data;
-}
+    try {
+        // 1. Dapatkan Sesi Browser & Token
+        const sessionRes = await axios.get('https://www.alightpro.my.id/api/session', axiosConfig);
+        const sessionData = sessionRes.data;
+        const cookies = sessionRes.headers['set-cookie'] ? sessionRes.headers['set-cookie'].map(c => c.split(';')[0]).join('; ') : '';
 
-// ENGINE 2: IRFANJAWA
-async function sendLinkIrfan(email) {
-    const { data } = await axios.post('https://amprem.irfanjawa.com/api/auth/send-magic-link', { email }, { headers: HEADERS_IRFAN, timeout: 15000 });
-    return data;
+        if (!sessionData.status || !sessionData.token) throw new Error('Gagal mendapatkan sesi token dari server AlightPro.');
+
+        const action = rawLink ? 'verify' : 'send';
+        const prefix = `${sessionData.sessionId}:${sessionData.nonce}:${email.toLowerCase()}:${action}:`;
+        let pow = Date.now().toString();
+        const difficulty = sessionData.difficulty || '0000';
+        
+        // 2. Kalkulasi Bypass Anti-Bot (Proof of Work)
+        for (let i = 0; i < 500000; i++) {
+            const hash = crypto.createHash('sha256').update(prefix + i.toString()).digest('hex');
+            if (hash.startsWith(difficulty)) { pow = i.toString(); break; }
+        }
+
+        // 3. Tembak API
+        let postConfig = { ...axiosConfig };
+        postConfig.headers['Content-Type'] = 'application/json';
+        postConfig.headers['X-Amprem-Token'] = sessionData.token;
+        postConfig.headers['X-Amprem-Nonce'] = sessionData.nonce;
+        postConfig.headers['X-Amprem-Pow'] = pow;
+        postConfig.headers['Cookie'] = cookies;
+
+        const payload = { action, email };
+        if (rawLink) payload.link = rawLink;
+
+        const submitRes = await axios.post('https://www.alightpro.my.id/api/alight-motion', payload, postConfig);
+
+        return { success: submitRes.data.status === true, message: submitRes.data.msg || 'Aksi Berhasil!' };
+    } catch (err) {
+        let errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message;
+        
+        if (errorMsg.includes("unavailable in your region") || errorMsg.includes("403 Forbidden")) {
+            errorMsg = "Terblokir Cloudflare. Wajib ganti IP Proxy Indonesia di settings.js!";
+        } else if (errorMsg.includes("ECONNRESET") || errorMsg.includes("timeout") || errorMsg.includes("socket hang up")) {
+            errorMsg = "Koneksi Proxy Mati/Terputus. Ganti IP Proxy!";
+        }
+        return { success: false, error: errorMsg };
+    }
 }
-async function verifyLinkIrfan(email, link) {
-    const { data } = await axios.post('https://amprem.irfanjawa.com/api/auth/verify-magic-link', { email, magicLink: link }, { headers: HEADERS_IRFAN, timeout: 20000 });
-    return data;
-}
-// ======================================================
+// ====================================================================
 
 module.exports = (bot, readDB, writeDB) => {
     // FITUR 1: TEMPMAIL
@@ -71,7 +91,7 @@ module.exports = (bot, readDB, writeDB) => {
             const emailAddr = mailRes.data.email;
             if(!emailAddr) throw new Error("API tidak mengembalikan email valid");
 
-            bot.editMessageText(`<blockquote><b>${e.succes} TEMPMAIL SIAP DIGUNAKAN</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Status: ${e.loading} Memantau pesan masuk (Maks 2 Menit)\n\n<i>Ketik:</i>\n<code>/amprem ${emailAddr}</code>\n<i>sekarang juga untuk memulai proses aktivasi!</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+            bot.editMessageText(`<blockquote><b>${e.succes} TEMPMAIL SIAP DIGUNAKAN</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Status: ${e.loading} Memantau pesan masuk (Maks 2 Menit)\n\n<i>Ketik:</i>\n<code>/amprem ${emailAddr}</code>\n<i>sekarang juga untuk memicu link otomatis!</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
 
             let attempt = 0;
             let checker = setInterval(async () => {
@@ -123,7 +143,7 @@ module.exports = (bot, readDB, writeDB) => {
         const inputArgs = match[1];
 
         if (inputArgs && inputArgs.includes('http')) {
-            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan meminta link-nya di pesan berikutnya.</blockquote>`, {parse_mode: 'HTML'});
+            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan memicu link-nya secara otomatis.</blockquote>`, {parse_mode: 'HTML'});
         }
 
         if (!inputArgs || !inputArgs.includes('@')) {
@@ -134,37 +154,22 @@ module.exports = (bot, readDB, writeDB) => {
 
         if (user.limit !== "UNLIMITED" && user.limit <= 0) return bot.sendMessage(chatId, `<blockquote>${e.error} Limit harian kamu sudah habis!</blockquote>`, {parse_mode: 'HTML'});
 
-        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MENYIAPKAN SESI AMPREM</b>\n\nMeminta server untuk mengirimkan Magic Link...</blockquote>`, {parse_mode: 'HTML'});
+        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MENYIAPKAN SESI ALIGHTPRO</b>\n\nMeminta server untuk mengirimkan Magic Link ke email...</blockquote>`, {parse_mode: 'HTML'});
 
-        let activeEngine = null;
-        let errDapji = '';
-        let errIrfan = '';
-
-        // DUAL ENGINE FIRING LOGIC
-        try {
-            await sendLinkDapji(email);
-            activeEngine = 'DAPJI';
-        } catch (err1) {
-            errDapji = parseError(err1);
-            try {
-                await sendLinkIrfan(email);
-                activeEngine = 'IRFANJAWA';
-            } catch (err2) {
-                errIrfan = parseError(err2);
-            }
-        }
-
-        if (!activeEngine) {
-            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\nSemua Engine Pusat Error/Mati!\n\n${e.block_mid} E1 (Dapji): <code>${errDapji}</code>\n${e.block_end} E2 (Irfan): <code>${errIrfan}</code></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        // Memicu API AlightPro untuk mengirim email verifikasi (action = 'send')
+        const sendRes = await alightMotionAxios(email, null);
+        
+        if (!sendRes.success) {
+            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\n\nDetail: <code>${sendRes.error}</code></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
         }
 
         // Simpan Sesi (Tunggu user mengirim link)
-        ampremState.set(userId, { email, chatId, engine: activeEngine });
+        ampremState.set(userId, { email, chatId });
 
-        bot.editMessageText(`<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_mid} Engine: <b>${activeEngine}</b>\n${e.block_end} Status: Link telah dikirim ke email tersebut!\n\n<i>Tunggu link-nya muncul dari tempmail, lalu salin dan kirimkan link tersebut ke chat ini.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        bot.editMessageText(`<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Link Verifikasi telah dikirim ke email tersebut!\n\n<i>Tunggu link-nya muncul dari tempmail, lalu salin dan kirimkan link tersebut ke chat ini.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
     });
 
-    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi API)
+    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi Link)
     bot.on('message', async (msg) => {
         const userId = msg.from.id.toString();
         if (!msg.text) return;
@@ -184,9 +189,7 @@ module.exports = (bot, readDB, writeDB) => {
             
             if (linkMatch) {
                 const link = linkMatch[0].replace(/&amp;/g, '&').replace(/&/g, '&');
-                
                 const userStateEmail = state.email;
-                const activeEngine = state.engine;
                 ampremState.delete(userId); 
 
                 let db = readDB();
@@ -200,33 +203,13 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 }
 
-                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Menerapkan lisensi premium ke akun...</blockquote>`, {parse_mode: 'HTML'});
+                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Mengirim link ke AlightPro...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
-                let isSuccess = false;
-                let finalMsg = '';
-                let finalErr = '';
+                // Eksekusi API AlightPro untuk verifikasi link (action = 'verify')
+                const actRes = await alightMotionAxios(userStateEmail, link);
 
-                try {
-                    let actRes;
-                    if (activeEngine === 'DAPJI') {
-                        actRes = await verifyLinkDapji(userStateEmail, link);
-                    } else {
-                        actRes = await verifyLinkIrfan(userStateEmail, link);
-                    }
-
-                    // Cek jika balasan sukses
-                    if (actRes.status === true || actRes.success === true || (actRes.msg && actRes.msg.includes("berhasil")) || (actRes.message && actRes.message.includes("berhasil"))) {
-                        isSuccess = true;
-                        finalMsg = actRes.msg || actRes.message || "Berhasil Diterapkan!";
-                    } else {
-                        throw new Error(parseError({ response: { data: actRes } }));
-                    }
-                } catch (err) {
-                    finalErr = parseError(err);
-                }
-
-                if (isSuccess) {
+                if (actRes.success) {
                     db = readDB(); 
                     if (db[userId].limit !== "UNLIMITED") {
                         db[userId].limit -= 1;
@@ -234,10 +217,10 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                     let limitText = db[userId].limit === "UNLIMITED" ? "Unlimited" : `${db[userId].limit}/${settings.roleLimits[db[userId].role]}`;
                     
-                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${finalMsg}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${actRes.message}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 } else {
                     ampremCooldowns.delete(userId); 
-                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: <code>${finalErr}</code></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: <code>${actRes.error}</code></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 }
             } else {
                 bot.sendMessage(state.chatId, `<blockquote>${e.error} Itu bukan link verifikasi yang valid!\nSilakan kirim link Alight Motion atau ketik <code>/cancel</code>.</blockquote>`, {parse_mode: 'HTML'});
