@@ -1,5 +1,6 @@
 const axios = require('axios');
 const crypto = require('crypto');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const settings = require('./settings');
 const e = require('./emojis');
 
@@ -10,7 +11,8 @@ const checkAccess = (msg) => {
 
 const HEADERS = {
     'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+    'X-Forwarded-For': '114.124.' + Math.floor(Math.random() * 255) + '.' + Math.floor(Math.random() * 255)
 };
 
 const ampremCooldowns = new Map();
@@ -25,12 +27,13 @@ function generateRandomString(length) {
     return result;
 }
 
-// Custom request handler untuk mengatasi Cloudflare 503 / 502
-async function fetchWithRetry(url, data, retries = 3) {
+// Custom request handler untuk mengatasi 503 / 502
+async function fetchWithRetry(url, data, retries = 3, customHeaders = {}) {
     let lastErr;
+    let finalHeaders = { ...HEADERS, ...customHeaders };
     for (let i = 0; i <= retries; i++) {
         try {
-            const res = await axios.post(url, data, { headers: HEADERS, timeout: 15000 });
+            const res = await axios.post(url, data, { headers: finalHeaders, timeout: 15000 });
             return res;
         } catch (err) {
             lastErr = err;
@@ -65,24 +68,44 @@ async function getRyezenSession() {
 
 async function activateRyezen(email, rawLink, cookie) {
     try {
-        const actRes = await axios.post('https://www.ryezenstore.online/api/am/activate', {
-            email: email, magicLink: rawLink
-        }, {
+        // Trik Ninja: Pancing API send-link agar email terdaftar di database Ryezen (mencegah error sistem)
+        await axios.post('https://www.ryezenstore.online/api/am/send-link', { email }, {
             headers: { 'Content-Type': 'application/json', 'Cookie': cookie, 'User-Agent': HEADERS['User-Agent'] },
-            timeout: 20000
-        });
+            timeout: 10000
+        }).catch(() => {}); // Abaikan error di tahap pancingan ini
+
+        const actRes = await fetchWithRetry('https://www.ryezenstore.online/api/am/activate', {
+            email: email, magicLink: rawLink
+        }, 2, { 'Cookie': cookie, 'Origin': 'https://www.ryezenstore.online', 'Referer': 'https://www.ryezenstore.online/dashboard/am-premium' });
+        
         return { success: true, message: actRes.data.message || 'Lisensi Premium Berhasil Ditambahkan via Engine 1!' };
     } catch (err) {
         return { success: false, error: err.response?.data?.error || err.response?.data?.message || err.message };
     }
 }
 
-// ================= ENGINE 2: ALIGHTPRO DIRECT NATIVE =================
+// ================= ENGINE 2: ALIGHTPRO DIRECT NATIVE (DENGAN PROXY) =================
 async function alightMotionDirectAxios(email, rawLink) {
+    let axiosConfig = {
+        headers: { 
+            'User-Agent': HEADERS['User-Agent'], 
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': 'https://alightcreative.com',
+            'Referer': 'https://alightcreative.com/',
+            'X-Forwarded-For': HEADERS['X-Forwarded-For']
+        }, 
+        timeout: 25000
+    };
+
+    // Inject Proxy agar Region Block tertembus!
+    if (settings.PROXY_HOST && settings.PROXY_PORT) {
+        const proxyUrl = `http://${settings.PROXY_HOST}:${settings.PROXY_PORT}`;
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false; 
+    }
+
     try {
-        const sessionRes = await axios.get('https://www.alightpro.my.id/api/session', {
-            headers: { 'User-Agent': HEADERS['User-Agent'], 'X-Requested-With': 'XMLHttpRequest' }, timeout: 15000
-        });
+        const sessionRes = await axios.get('https://www.alightpro.my.id/api/session', axiosConfig);
         const sessionData = sessionRes.data;
         const cookies = sessionRes.headers['set-cookie'] ? sessionRes.headers['set-cookie'].map(c => c.split(';')[0]).join('; ') : '';
 
@@ -97,20 +120,22 @@ async function alightMotionDirectAxios(email, rawLink) {
             if (hash.startsWith(difficulty)) { pow = i.toString(); break; }
         }
 
+        let postConfig = { ...axiosConfig };
+        postConfig.headers['Content-Type'] = 'application/json';
+        postConfig.headers['X-Amprem-Token'] = sessionData.token;
+        postConfig.headers['X-Amprem-Nonce'] = sessionData.nonce;
+        postConfig.headers['X-Amprem-Pow'] = pow;
+        postConfig.headers['Cookie'] = cookies;
+
         const submitRes = await axios.post('https://www.alightpro.my.id/api/alight-motion', {
             action: 'verify', email, link: rawLink
-        }, {
-            headers: {
-                'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
-                'X-Amprem-Token': sessionData.token, 'X-Amprem-Nonce': sessionData.nonce, 'X-Amprem-Pow': pow,
-                'Cookie': cookies, 'User-Agent': HEADERS['User-Agent']
-            }
-        });
+        }, postConfig);
 
         return { success: submitRes.data.status === true, message: submitRes.data.msg || 'Lisensi Berhasil Ditambahkan via Engine 2!' };
     } catch (err) {
         let errorMsg = err.response?.data?.msg || err.message;
-        if (errorMsg.includes("unavailable in your region")) errorMsg = "Terblokir oleh Cloudflare (Region Block).";
+        if (errorMsg.includes("unavailable in your region")) errorMsg = "Terblokir oleh Cloudflare. Pastikan Proxy Indonesia di settings.js aktif dan hidup!";
+        if (errorMsg.includes("ECONNRESET") || errorMsg.includes("timeout") || errorMsg.includes("socket hang up")) errorMsg = "Koneksi Proxy Terputus. Ganti IP Proxy!";
         return { success: false, error: errorMsg };
     }
 }
@@ -150,7 +175,7 @@ module.exports = (bot, readDB, writeDB) => {
                         }
                         
                         if (magicLink) {
-                            bot.sendMessage(chatId, `<blockquote><b>${e.chat} LINK OOB DITEMUKAN!</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Link:\n<code>${magicLink}</code>\n\n<i>Silakan salin link di atas dan jalankan proses verifikasi menggunakan command:</i>\n<code>/amprem ${emailAddr}</code></blockquote>`, {parse_mode: 'HTML'});
+                            bot.sendMessage(chatId, `<blockquote><b>${e.chat} LINK OOB DITEMUKAN!</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Link:\n<code>${magicLink}</code>\n\n<i>Silakan salin link di atas dan jalankan:</i>\n<code>/amprem ${emailAddr}</code></blockquote>`, {parse_mode: 'HTML'});
                         } else {
                             bot.sendMessage(chatId, `<blockquote>${e.error} Email masuk, tapi Link Verifikasi tidak ditemukan.</blockquote>`, {parse_mode: 'HTML'});
                         }
@@ -226,7 +251,7 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 }
 
-                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Status: Mengirim request melalui Engine 1 (Ryezen)...</blockquote>`, {parse_mode: 'HTML'});
+                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Status: Memulai Engine 1 (Ryezen)...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
                 let isSuccess = false;
@@ -234,7 +259,6 @@ module.exports = (bot, readDB, writeDB) => {
                 let debugError = "";
 
                 try {
-                    // Coba Engine 1
                     const sessionCookie = await getRyezenSession();
                     const res1 = await activateRyezen(state.email, link, sessionCookie);
                     if (res1.success) {
@@ -245,9 +269,8 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 } catch (err1) {
                     debugError += `E1: ${err1.message} | `;
-                    bot.editMessageText(`<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_mid} Error 1: <code>${err1.message.substring(0,40)}...</code>\n${e.block_end} Status: Mengalihkan ke Engine 2 (Direct)...</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_mid} Error 1: <code>${err1.message.substring(0,40)}...</code>\n${e.block_end} Status: Mengalihkan ke Engine 2 (Direct Proxy)...</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                     
-                    // Coba Engine 2 (Fallback)
                     const res2 = await alightMotionDirectAxios(state.email, link);
                     if (res2.success) {
                         isSuccess = true;
