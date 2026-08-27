@@ -16,49 +16,43 @@ const ampremCooldowns = new Map();
 const ampremState = new Map(); // Menyimpan state { email, chatId }
 const COOLDOWN_TIME = 60000;
 
-function generateRandomString(length) {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-    return result;
-}
+// ================= API DAPJIMOTIONPRO (ENGINE BARU) =================
+const API_URL = 'https://dapjimotionpro.my.id/api/proxy-amprem';
 
-// MESIN UTAMA: Mengeksekusi aktivasi via RyezenStore API secara langsung
-async function processRyezen(email, magicLink) {
-    const user = `kn_${generateRandomString(6)}`;
-    const pass = `pws${generateRandomString(8)}`;
-    
+async function sendLinkDapji(email) {
     try {
-        // 1. Registrasi Akun Ryezen Baru (Bypass Limit)
-        await axios.post('https://www.ryezenstore.online/api/auth/register', { username: user, password: pass }, { headers: HEADERS, timeout: 15000 });
-        
-        // 2. Login untuk mengambil Session Cookie
-        const loginRes = await axios.post('https://www.ryezenstore.online/api/auth/login', { username: user, password: pass }, { headers: HEADERS, timeout: 15000 });
-        
-        const cookies = loginRes.headers['set-cookie'];
-        if (!cookies || cookies.length === 0) throw new Error("Gagal mengambil Session Cookie dari server.");
-        const sessionCookie = cookies.map(c => c.split(';')[0]).join('; ');
-
-        // 3. Terapkan Lisensi Amprem
-        const actRes = await axios.post('https://www.ryezenstore.online/api/am/activate', {
-            email: email, magicLink: magicLink
-        }, {
-            headers: { ...HEADERS, 'Cookie': sessionCookie },
-            timeout: 25000
-        });
-
-        return { success: true, message: actRes.data.message || 'Lisensi Premium berhasil diterapkan!' };
+        const { data } = await axios.post(API_URL, {
+            action: 'send',
+            email: email
+        }, { headers: HEADERS, timeout: 15000 });
+        return { success: true, data: data };
     } catch (err) {
-        let errMsg = err.response?.data?.error || err.response?.data?.message || err.message;
-        if (err.response && (err.response.status === 502 || err.response.status === 503)) {
-            errMsg = "Server Pusat Sedang Down / Terkena Limit (503/502 Bad Gateway).";
-        }
-        return { success: false, error: errMsg };
+        throw new Error(err.response?.data?.message || err.response?.data || err.message);
     }
 }
 
+async function verifyLinkDapji(email, link) {
+    try {
+        const { data } = await axios.post(API_URL, {
+            action: 'verify',
+            email: email,
+            link: link
+        }, { headers: HEADERS, timeout: 25000 });
+        
+        // Cek struktur response dari Dapji, sesuaikan jika formatnya berbeda
+        if (data.status === true || data.success === true || (data.msg && data.msg.includes("berhasil"))) {
+             return { success: true, message: data.msg || 'Lisensi Premium berhasil diterapkan!' };
+        } else {
+             return { success: false, error: data.msg || JSON.stringify(data) };
+        }
+    } catch (err) {
+        return { success: false, error: err.response?.data?.message || err.response?.data || err.message };
+    }
+}
+// ====================================================================
+
 module.exports = (bot, readDB, writeDB) => {
-    // ================= FITUR 1: TEMPMAIL =================
+    // FITUR 1: TEMPMAIL
     bot.onText(/^\/tempmail$/, async (msg) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
@@ -70,7 +64,7 @@ module.exports = (bot, readDB, writeDB) => {
             const emailAddr = mailRes.data.email;
             if(!emailAddr) throw new Error("API tidak mengembalikan email valid");
 
-            bot.editMessageText(`<blockquote><b>${e.succes} TEMPMAIL SIAP DIGUNAKAN</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Status: ${e.loading} Memantau pesan masuk (Maks 2 Menit)\n\n<i>Ketik:</i>\n<code>/amprem ${emailAddr}</code>\n<i>sekarang juga untuk bersiap menerima link otomatis!</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+            bot.editMessageText(`<blockquote><b>${e.succes} TEMPMAIL SIAP DIGUNAKAN</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Status: ${e.loading} Memantau pesan masuk (Maks 2 Menit)\n\n<i>Ketik:</i>\n<code>/amprem ${emailAddr}</code>\n<i>sekarang juga untuk memulai proses aktivasi!</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
 
             let attempt = 0;
             let checker = setInterval(async () => {
@@ -93,7 +87,7 @@ module.exports = (bot, readDB, writeDB) => {
                         }
                         
                         if (magicLink) {
-                            bot.sendMessage(chatId, `<blockquote><b>${e.chat} LINK OOB DITEMUKAN!</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Link:\n<code>${magicLink}</code>\n\n<i>Salin link di atas dan tempel di chat ini untuk menyelesaikan proses Amprem.</i></blockquote>`, {parse_mode: 'HTML'});
+                            bot.sendMessage(chatId, `<blockquote><b>${e.chat} LINK OOB DITEMUKAN!</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Link:\n<code>${magicLink}</code>\n\n<i>Silakan salin link di atas dan tempel di chat ini untuk menyelesaikan proses Amprem.</i></blockquote>`, {parse_mode: 'HTML'});
                         } else {
                             bot.sendMessage(chatId, `<blockquote>${e.error} Email masuk, tapi Link Verifikasi tidak ditemukan.</blockquote>`, {parse_mode: 'HTML'});
                         }
@@ -108,7 +102,7 @@ module.exports = (bot, readDB, writeDB) => {
         }
     });
 
-    // ================= FITUR 2: INISIASI AMPREM =================
+    // FITUR 2: INISIASI AMPREM (Tahap 1 - Memicu Link & Menunggu)
     bot.onText(/^\/amprem(?:\s+(.+))?$/, async (msg, match) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
@@ -122,7 +116,7 @@ module.exports = (bot, readDB, writeDB) => {
         const inputArgs = match[1];
 
         if (inputArgs && inputArgs.includes('http')) {
-            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan meminta link-nya di pesan berikutnya.</blockquote>`, {parse_mode: 'HTML'});
+            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan memicu link-nya secara otomatis.</blockquote>`, {parse_mode: 'HTML'});
         }
 
         if (!inputArgs || !inputArgs.includes('@')) {
@@ -133,13 +127,22 @@ module.exports = (bot, readDB, writeDB) => {
 
         if (user.limit !== "UNLIMITED" && user.limit <= 0) return bot.sendMessage(chatId, `<blockquote>${e.error} Limit harian kamu sudah habis!</blockquote>`, {parse_mode: 'HTML'});
 
-        // Merekam Sesi Tunggu Link Tanpa Eksekusi API Apapun
+        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MENYIAPKAN SESI AMPREM</b>\n\nMeminta server untuk mengirimkan Magic Link...</blockquote>`, {parse_mode: 'HTML'});
+
+        // Memicu API Dapji untuk mengirim email verifikasi
+        try {
+            await sendLinkDapji(email);
+        } catch (err) {
+            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\nServer menolak pengiriman link. Pastikan email valid.\nDetail: <code>${err.message}</code></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        }
+
+        // Simpan Sesi ke State
         ampremState.set(userId, { email, chatId });
 
-        bot.sendMessage(chatId, `<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Menunggu kamu mengirimkan OOB Link...\n\n<i>Kirim link Alight Motion ke chat ini sekarang.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {parse_mode: 'HTML'});
+        bot.editMessageText(`<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Link Verifikasi telah dikirim ke email tersebut!\n\n<i>Tunggu link-nya muncul dari tempmail, lalu salin dan kirimkan link tersebut ke chat ini.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
     });
 
-    // ================= FITUR 3: EKSEKUSI MAGIC LINK =================
+    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi API via Dapji)
     bot.on('message', async (msg) => {
         const userId = msg.from.id.toString();
         if (!msg.text) return;
@@ -160,7 +163,6 @@ module.exports = (bot, readDB, writeDB) => {
             if (linkMatch) {
                 const link = linkMatch[0].replace(/&amp;/g, '&').replace(/&/g, '&');
                 
-                // Ambil data state dan hapus agar tidak double-hit
                 const userStateEmail = state.email;
                 ampremState.delete(userId); 
 
@@ -175,13 +177,13 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 }
 
-                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Mengirim request ke Server Pusat...</blockquote>`, {parse_mode: 'HTML'});
+                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Menerapkan lisensi premium ke akun...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
-                // Eksekusi API secara Penuh (Register -> Login -> Activate)
-                const result = await processRyezen(userStateEmail, link);
+                // Eksekusi Activate menggunakan API Dapji
+                const actRes = await verifyLinkDapji(userStateEmail, link);
 
-                if (result.success) {
+                if (actRes.success) {
                     db = readDB(); 
                     if (db[userId].limit !== "UNLIMITED") {
                         db[userId].limit -= 1;
@@ -189,10 +191,10 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                     let limitText = db[userId].limit === "UNLIMITED" ? "Unlimited" : `${db[userId].limit}/${settings.roleLimits[db[userId].role]}`;
                     
-                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Status: ${result.message}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${actRes.message}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 } else {
                     ampremCooldowns.delete(userId); 
-                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: ${result.error}</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: ${actRes.error}</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 }
             } else {
                 bot.sendMessage(state.chatId, `<blockquote>${e.error} Itu bukan link verifikasi yang valid!\nSilakan kirim link Alight Motion atau ketik <code>/cancel</code>.</blockquote>`, {parse_mode: 'HTML'});
