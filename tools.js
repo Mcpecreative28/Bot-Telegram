@@ -1,6 +1,4 @@
 const axios = require('axios');
-const crypto = require('crypto');
-const { HttpsProxyAgent } = require('https-proxy-agent');
 const settings = require('./settings');
 const e = require('./emojis');
 
@@ -11,14 +9,12 @@ const checkAccess = (msg) => {
 
 const HEADERS = {
     'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-    'X-Forwarded-For': '114.124.' + Math.floor(Math.random() * 255) + '.' + Math.floor(Math.random() * 255)
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 };
 
 const ampremCooldowns = new Map();
-const ampremState = new Map();
+const ampremState = new Map(); // Menyimpan { email, chatId, cookie }
 const COOLDOWN_TIME = 60000;
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function generateRandomString(length) {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -27,132 +23,38 @@ function generateRandomString(length) {
     return result;
 }
 
-// Custom request handler untuk mengatasi 503 / 502
-async function fetchWithRetry(url, data, retries = 3, customHeaders = {}) {
-    let lastErr;
-    let finalHeaders = { ...HEADERS, ...customHeaders };
-    for (let i = 0; i <= retries; i++) {
-        try {
-            const res = await axios.post(url, data, { headers: finalHeaders, timeout: 15000 });
-            return res;
-        } catch (err) {
-            lastErr = err;
-            if (err.response && (err.response.status === 503 || err.response.status === 502 || err.response.status === 429)) {
-                await delay(3000); 
-                continue;
-            }
-            if (err.response && err.response.status === 400) throw err; 
-            await delay(2000);
-        }
-    }
-    throw lastErr;
-}
-
-// ================= ENGINE 1: RYEZEN STORE =================
+// FUNGSI MEMBUAT AKUN RYEZEN BARU (GRATIS KREDIT)
 async function getRyezenSession() {
     const user = `kn_${generateRandomString(6)}`;
     const pass = `pws${generateRandomString(8)}`;
     try {
-        await fetchWithRetry('https://www.ryezenstore.online/api/auth/register', { username: user, password: pass });
-        const loginRes = await fetchWithRetry('https://www.ryezenstore.online/api/auth/login', { username: user, password: pass });
+        await axios.post('https://www.ryezenstore.online/api/auth/register', { username: user, password: pass }, { headers: HEADERS, timeout: 10000 });
+        const loginRes = await axios.post('https://www.ryezenstore.online/api/auth/login', { username: user, password: pass }, { headers: HEADERS, timeout: 10000 });
 
         const cookies = loginRes.headers['set-cookie'];
         if (cookies && cookies.length > 0) {
             return cookies.map(c => c.split(';')[0]).join('; ');
         }
-        throw new Error("Sesi Cookie gagal di-ekstrak.");
+        return null;
     } catch (err) {
-        throw new Error(`Ryezen Error: ${err.response?.data?.error || err.response?.data?.message || err.message}`);
-    }
-}
-
-async function activateRyezen(email, rawLink, cookie) {
-    try {
-        // Trik Ninja: Pancing API send-link agar email terdaftar di database Ryezen (mencegah error sistem)
-        await axios.post('https://www.ryezenstore.online/api/am/send-link', { email }, {
-            headers: { 'Content-Type': 'application/json', 'Cookie': cookie, 'User-Agent': HEADERS['User-Agent'] },
-            timeout: 10000
-        }).catch(() => {}); // Abaikan error di tahap pancingan ini
-
-        const actRes = await fetchWithRetry('https://www.ryezenstore.online/api/am/activate', {
-            email: email, magicLink: rawLink
-        }, 2, { 'Cookie': cookie, 'Origin': 'https://www.ryezenstore.online', 'Referer': 'https://www.ryezenstore.online/dashboard/am-premium' });
-        
-        return { success: true, message: actRes.data.message || 'Lisensi Premium Berhasil Ditambahkan via Engine 1!' };
-    } catch (err) {
-        return { success: false, error: err.response?.data?.error || err.response?.data?.message || err.message };
-    }
-}
-
-// ================= ENGINE 2: ALIGHTPRO DIRECT NATIVE (DENGAN PROXY) =================
-async function alightMotionDirectAxios(email, rawLink) {
-    let axiosConfig = {
-        headers: { 
-            'User-Agent': HEADERS['User-Agent'], 
-            'X-Requested-With': 'XMLHttpRequest',
-            'Origin': 'https://alightcreative.com',
-            'Referer': 'https://alightcreative.com/',
-            'X-Forwarded-For': HEADERS['X-Forwarded-For']
-        }, 
-        timeout: 25000
-    };
-
-    // Inject Proxy agar Region Block tertembus!
-    if (settings.PROXY_HOST && settings.PROXY_PORT) {
-        const proxyUrl = `http://${settings.PROXY_HOST}:${settings.PROXY_PORT}`;
-        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-        axiosConfig.proxy = false; 
-    }
-
-    try {
-        const sessionRes = await axios.get('https://www.alightpro.my.id/api/session', axiosConfig);
-        const sessionData = sessionRes.data;
-        const cookies = sessionRes.headers['set-cookie'] ? sessionRes.headers['set-cookie'].map(c => c.split(';')[0]).join('; ') : '';
-
-        if (!sessionData.status || !sessionData.token) throw new Error('Gagal memuat token otentikasi server.');
-
-        const prefix = `${sessionData.sessionId}:${sessionData.nonce}:${email.toLowerCase()}:verify:`;
-        let pow = Date.now().toString();
-        const difficulty = sessionData.difficulty || '0000';
-        
-        for (let i = 0; i < 500000; i++) {
-            const hash = crypto.createHash('sha256').update(prefix + i.toString()).digest('hex');
-            if (hash.startsWith(difficulty)) { pow = i.toString(); break; }
-        }
-
-        let postConfig = { ...axiosConfig };
-        postConfig.headers['Content-Type'] = 'application/json';
-        postConfig.headers['X-Amprem-Token'] = sessionData.token;
-        postConfig.headers['X-Amprem-Nonce'] = sessionData.nonce;
-        postConfig.headers['X-Amprem-Pow'] = pow;
-        postConfig.headers['Cookie'] = cookies;
-
-        const submitRes = await axios.post('https://www.alightpro.my.id/api/alight-motion', {
-            action: 'verify', email, link: rawLink
-        }, postConfig);
-
-        return { success: submitRes.data.status === true, message: submitRes.data.msg || 'Lisensi Berhasil Ditambahkan via Engine 2!' };
-    } catch (err) {
-        let errorMsg = err.response?.data?.msg || err.message;
-        if (errorMsg.includes("unavailable in your region")) errorMsg = "Terblokir oleh Cloudflare. Pastikan Proxy Indonesia di settings.js aktif dan hidup!";
-        if (errorMsg.includes("ECONNRESET") || errorMsg.includes("timeout") || errorMsg.includes("socket hang up")) errorMsg = "Koneksi Proxy Terputus. Ganti IP Proxy!";
-        return { success: false, error: errorMsg };
+        return null;
     }
 }
 
 module.exports = (bot, readDB, writeDB) => {
+    // FITUR 1: TEMPMAIL
     bot.onText(/^\/tempmail$/, async (msg) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
         const chatId = msg.chat.id;
-        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MEMBUAT TEMPMAIL</b>\nSedang menyiapkan email menggunakan API Custom...</blockquote>`, {parse_mode: 'HTML'});
+        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MEMBUAT TEMPMAIL</b>\nSedang menyiapkan email...</blockquote>`, {parse_mode: 'HTML'});
         
         try {
             const mailRes = await axios.get('https://creatett-seven.vercel.app/api/tempmail/create');
             const emailAddr = mailRes.data.email;
             if(!emailAddr) throw new Error("API tidak mengembalikan email valid");
 
-            bot.editMessageText(`<blockquote><b>${e.succes} TEMPMAIL SIAP DIGUNAKAN</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Status: ${e.loading} Menunggu konfirmasi...\n\n<i>Masukkan email ini ke aplikasi Alight Motion kamu SEKARANG!\nJika ada email masuk, bot akan menampilkan Link-nya di sini.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+            bot.editMessageText(`<blockquote><b>${e.succes} TEMPMAIL SIAP DIGUNAKAN</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Status: ${e.loading} Memantau pesan masuk (Maks 2 Menit)\n\n<i>Ketik:</i>\n<code>/amprem ${emailAddr}</code>\n<i>untuk memicu pengiriman link secara otomatis!</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
 
             let attempt = 0;
             let checker = setInterval(async () => {
@@ -175,13 +77,13 @@ module.exports = (bot, readDB, writeDB) => {
                         }
                         
                         if (magicLink) {
-                            bot.sendMessage(chatId, `<blockquote><b>${e.chat} LINK OOB DITEMUKAN!</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Link:\n<code>${magicLink}</code>\n\n<i>Silakan salin link di atas dan jalankan:</i>\n<code>/amprem ${emailAddr}</code></blockquote>`, {parse_mode: 'HTML'});
+                            bot.sendMessage(chatId, `<blockquote><b>${e.chat} LINK OOB DITEMUKAN!</b>\n\n${e.block_mid} Email: <code>${emailAddr}</code>\n${e.block_end} Link:\n<code>${magicLink}</code>\n\n<i>Silakan salin link di atas dan tempel di chat ini untuk menyelesaikan proses Amprem!</i></blockquote>`, {parse_mode: 'HTML'});
                         } else {
                             bot.sendMessage(chatId, `<blockquote>${e.error} Email masuk, tapi Link Verifikasi tidak ditemukan.</blockquote>`, {parse_mode: 'HTML'});
                         }
                     } else if (attempt >= 40) { 
                         clearInterval(checker);
-                        bot.sendMessage(chatId, `<blockquote>${e.warn} Waktu tunggu habis untuk <code>${emailAddr}</code>. Silakan buat ulang.</blockquote>`, {parse_mode: 'HTML'});
+                        bot.sendMessage(chatId, `<blockquote>${e.warn} Pemantauan dihentikan untuk <code>${emailAddr}</code>.</blockquote>`, {parse_mode: 'HTML'});
                     }
                 } catch(err) {}
             }, 3000);
@@ -190,6 +92,7 @@ module.exports = (bot, readDB, writeDB) => {
         }
     });
 
+    // FITUR 2: INISIASI AMPREM (Tahap 1 - Memicu Link & Menunggu)
     bot.onText(/^\/amprem(?:\s+(.+))?$/, async (msg, match) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
@@ -203,7 +106,7 @@ module.exports = (bot, readDB, writeDB) => {
         const inputArgs = match[1];
 
         if (inputArgs && inputArgs.includes('http')) {
-            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan meminta link-nya di pesan selanjutnya.</blockquote>`, {parse_mode: 'HTML'});
+            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan memicu link-nya secara otomatis.</blockquote>`, {parse_mode: 'HTML'});
         }
 
         if (!inputArgs || !inputArgs.includes('@')) {
@@ -214,11 +117,31 @@ module.exports = (bot, readDB, writeDB) => {
 
         if (user.limit !== "UNLIMITED" && user.limit <= 0) return bot.sendMessage(chatId, `<blockquote>${e.error} Limit harian kamu sudah habis!</blockquote>`, {parse_mode: 'HTML'});
 
-        ampremState.set(userId, { email, chatId });
+        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MENYIAPKAN SESI AMPREM</b>\n\nSedang mendaftarkan akun di server pusat...</blockquote>`, {parse_mode: 'HTML'});
 
-        bot.sendMessage(chatId, `<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Menunggu kamu mengirimkan OOB Link...\n\n<i>Kirim link Alight Motion ke chat ini sekarang.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {parse_mode: 'HTML'});
+        // 1. Dapatkan Sesi Ryezen
+        const sessionCookie = await getRyezenSession();
+        if (!sessionCookie) {
+            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL</b>\nServer Ryezen sedang sibuk. Silakan coba lagi nanti.</blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        }
+
+        // 2. Suruh Ryezen Kirim Link ke Email
+        try {
+            await axios.post('https://www.ryezenstore.online/api/am/send-link', { email }, {
+                headers: { 'Content-Type': 'application/json', 'Cookie': sessionCookie, 'User-Agent': HEADERS['User-Agent'] },
+                timeout: 15000
+            });
+        } catch (err) {
+            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\nServer menolak pengiriman link. Pastikan email valid dan belum terdaftar premium.</blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+        }
+
+        // 3. Simpan Sesi ke State
+        ampremState.set(userId, { email, chatId, cookie: sessionCookie });
+
+        bot.editMessageText(`<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Link Verifikasi telah dikirim otomatis ke email tersebut!\n\n<i>Tunggu link-nya muncul di atas, lalu salin dan kirimkan link tersebut ke chat ini.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
     });
 
+    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi API via Ryezen)
     bot.on('message', async (msg) => {
         const userId = msg.from.id.toString();
         if (!msg.text) return;
@@ -238,6 +161,10 @@ module.exports = (bot, readDB, writeDB) => {
             
             if (linkMatch) {
                 const link = linkMatch[0].replace(/&amp;/g, '&').replace(/&/g, '&');
+                
+                // Ambil data state dan hapus agar tidak double-hit
+                const userStateCookie = state.cookie;
+                const userStateEmail = state.email;
                 ampremState.delete(userId); 
 
                 let db = readDB();
@@ -251,36 +178,19 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 }
 
-                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Status: Memulai Engine 1 (Ryezen)...</blockquote>`, {parse_mode: 'HTML'});
+                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Menerapkan lisensi premium ke akun...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
-                let isSuccess = false;
-                let finalMessage = "";
-                let debugError = "";
-
                 try {
-                    const sessionCookie = await getRyezenSession();
-                    const res1 = await activateRyezen(state.email, link, sessionCookie);
-                    if (res1.success) {
-                        isSuccess = true;
-                        finalMessage = res1.message;
-                    } else {
-                        throw new Error(res1.error);
-                    }
-                } catch (err1) {
-                    debugError += `E1: ${err1.message} | `;
-                    bot.editMessageText(`<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_mid} Error 1: <code>${err1.message.substring(0,40)}...</code>\n${e.block_end} Status: Mengalihkan ke Engine 2 (Direct Proxy)...</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
-                    
-                    const res2 = await alightMotionDirectAxios(state.email, link);
-                    if (res2.success) {
-                        isSuccess = true;
-                        finalMessage = res2.message;
-                    } else {
-                        debugError += `E2: ${res2.error}`;
-                    }
-                }
+                    // Eksekusi Activate menggunakan Cookie yang sama saat send-link
+                    const actRes = await axios.post('https://www.ryezenstore.online/api/am/activate', {
+                        email: userStateEmail, magicLink: link
+                    }, {
+                        headers: { 'Content-Type': 'application/json', 'Cookie': userStateCookie, 'User-Agent': HEADERS['User-Agent'] },
+                        timeout: 20000
+                    });
 
-                if (isSuccess) {
+                    // Jika sukses
                     db = readDB(); 
                     if (db[userId].limit !== "UNLIMITED") {
                         db[userId].limit -= 1;
@@ -288,10 +198,11 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                     let limitText = db[userId].limit === "UNLIMITED" ? "Unlimited" : `${db[userId].limit}/${settings.roleLimits[db[userId].role]}`;
                     
-                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${state.email}</code>\n${e.block_mid} Info: ${finalMessage}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
-                } else {
+                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${actRes.data.message || 'Lisensi Berhasil Ditambahkan!'}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+
+                } catch (err) {
                     ampremCooldowns.delete(userId); 
-                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES TOTAL</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Log: <code>${debugError}</code></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: ${err.response?.data?.error || err.response?.data?.message || err.message}</blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 }
             } else {
                 bot.sendMessage(state.chatId, `<blockquote>${e.error} Itu bukan link verifikasi yang valid!\nSilakan kirim link Alight Motion atau ketik <code>/cancel</code>.</blockquote>`, {parse_mode: 'HTML'});
