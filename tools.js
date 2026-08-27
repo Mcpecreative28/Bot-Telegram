@@ -1,5 +1,6 @@
 const axios = require('axios');
 const crypto = require('crypto');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const settings = require('./settings');
 const e = require('./emojis');
 
@@ -8,6 +9,7 @@ const checkAccess = (msg) => {
     return isOwner || msg.chat.id.toString() === settings.GROUP_ID;
 };
 
+// Header manipulasi tambahan untuk memperkuat penyamaran
 const HEADERS = {
     'Content-Type': 'application/json',
     'Application-Version': '4.0.0',
@@ -19,7 +21,7 @@ const ampremCooldowns = new Map();
 const ampremState = new Map();
 const COOLDOWN_TIME = 60000;
 
-// FUNGSI BYPASS VERIFIKASI ROBOT + DUKUNGAN PROXY
+// FUNGSI BYPASS MENGGUNAKAN HTTPS PROXY AGENT (TUNNELING)
 async function alightMotionAxios(email, rawLink) {
     let axiosConfig = {
         headers: { 
@@ -27,16 +29,14 @@ async function alightMotionAxios(email, rawLink) {
             'X-Requested-With': 'XMLHttpRequest', 
             'X-Forwarded-For': HEADERS['X-Forwarded-For'] 
         },
-        timeout: 20000
+        timeout: 30000 // Waktu tunggu diperpanjang karena proxy gratisan biasanya lambat
     };
 
-    // Inject Proxy jika diatur di settings.js
+    // Inject HttpsProxyAgent jika diatur di settings.js
     if (settings.PROXY_HOST && settings.PROXY_PORT) {
-        axiosConfig.proxy = {
-            protocol: 'http',
-            host: settings.PROXY_HOST,
-            port: parseInt(settings.PROXY_PORT)
-        };
+        const proxyUrl = `http://${settings.PROXY_HOST}:${settings.PROXY_PORT}`;
+        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+        axiosConfig.proxy = false; // Matikan proxy bawaan axios agar tidak bentrok
     }
 
     try {
@@ -56,7 +56,6 @@ async function alightMotionAxios(email, rawLink) {
             if (hash.startsWith(difficulty)) { pow = i.toString(); break; }
         }
 
-        // Konfigurasi POST request dengan proxy
         let postConfig = { ...axiosConfig };
         postConfig.headers['Content-Type'] = 'application/json';
         postConfig.headers['X-Amprem-Token'] = sessionData.token;
@@ -71,37 +70,23 @@ async function alightMotionAxios(email, rawLink) {
         return { success: submitRes.data.status === true, message: submitRes.data.msg || 'Berhasil' };
     } catch (err) {
         let errorMsg = err.response?.data?.msg || err.message;
-        if (errorMsg.includes("unavailable in your region")) {
-            errorMsg += "\n\n<i>*Info: API Alight Motion memblokir IP VPS kamu secara permanen. Kamu WAJIB mencari Proxy Indonesia yang masih aktif dan memasukkannya ke file settings.js agar fitur ini bisa dipakai.</i>";
+        
+        // Deteksi Proxy Mati
+        if (errorMsg.includes("timeout") || errorMsg.includes("ECONNRESET") || errorMsg.includes("socket hang up")) {
+            errorMsg = "Koneksi Proxy Terputus (Proxy Mati/Sangat Lambat). Silakan ganti IP Proxy di settings.js.";
+        } else if (errorMsg.includes("unavailable in your region")) {
+            errorMsg += "\n\n<i>*Info: Jika pesan ini masih muncul, berarti IP Proxy yang kamu gunakan sudah diblacklist Cloudflare atau terdeteksi bukan IP Indonesia. Cari proxy lain!</i>";
         }
         return { success: false, error: errorMsg };
     }
 }
 
 module.exports = (bot, readDB, writeDB) => {
-    // FITUR 1: TEMPMAIL
     bot.onText(/^\/tempmail$/, async (msg) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
         const chatId = msg.chat.id;
-        const userId = msg.from.id.toString();
-        let db = readDB();
-        const user = db[userId];
-
-        if (!user) return bot.sendMessage(chatId, `<blockquote>${e.error} Data belum terdaftar. Ketik /start.</blockquote>`, {parse_mode: 'HTML'});
-        
-        if (user.limit !== "UNLIMITED" && user.limit <= 0) return bot.sendMessage(chatId, `<blockquote>${e.error} Limit harian kamu sudah habis!</blockquote>`, {parse_mode: 'HTML'});
-
-        if (ampremCooldowns.has(userId) && user.limit !== "UNLIMITED") {
-            const diff = Date.now() - ampremCooldowns.get(userId);
-            if (diff < COOLDOWN_TIME) {
-                const timeLeft = Math.ceil((COOLDOWN_TIME - diff) / 1000);
-                return bot.sendMessage(chatId, `<blockquote>${e.warn} <b>COOLDOWN AKTIF</b>\nTunggu <b>${timeLeft} detik</b> lagi sebelum membuat akun baru!</blockquote>`, {parse_mode: 'HTML'});
-            }
-        }
-
         let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MEMBUAT TEMPMAIL</b>\nSedang menyiapkan email menggunakan API Custom...</blockquote>`, {parse_mode: 'HTML'});
-        ampremCooldowns.set(userId, Date.now());
         
         try {
             const mailRes = await axios.get('https://creatett-seven.vercel.app/api/tempmail/create');
@@ -146,7 +131,6 @@ module.exports = (bot, readDB, writeDB) => {
         }
     });
 
-    // FITUR 2: INISIASI AMPREM (Tahap 1 - Meminta Link)
     bot.onText(/^\/amprem(?:\s+(.+))?$/, async (msg, match) => {
         if (!checkAccess(msg)) return bot.sendMessage(msg.chat.id, `<blockquote>${e.error} Akses ditolak. Command ini hanya di Grup Utama.</blockquote>`, {parse_mode: 'HTML'});
 
@@ -176,7 +160,6 @@ module.exports = (bot, readDB, writeDB) => {
         bot.sendMessage(chatId, `<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Menunggu kamu mengirimkan OOB Link...\n\n<i>Kirim link Alight Motion ke chat ini sekarang.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {parse_mode: 'HTML'});
     });
 
-    // FITUR 3: LISTENER MAGIC LINK (Tahap 2 - Mengeksekusi API)
     bot.on('message', async (msg) => {
         const userId = msg.from.id.toString();
         if (!msg.text) return;
@@ -209,7 +192,7 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 }
 
-                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Status: Melewati verifikasi sistem (Bypass Recaptcha)...</blockquote>`, {parse_mode: 'HTML'});
+                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AMPREM</b>\n\n${e.block_mid} Target: <code>${state.email}</code>\n${e.block_end} Status: Mengirim request via Proxy...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
                 const result = await alightMotionAxios(state.email, link);
