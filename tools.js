@@ -10,10 +10,10 @@ const checkAccess = (msg) => {
 };
 
 const ampremCooldowns = new Map();
-const ampremState = new Map(); // Menyimpan state { email, chatId }
+const ampremState = new Map(); 
 const COOLDOWN_TIME = 60000;
 
-// ================= ENGINE TUNGGAL: ALIGHTPRO NATIVE =================
+// ================= ENGINE TUNGGAL: ALIGHTPRO NATIVE DENGAN STRICT TIMEOUT =================
 async function alightMotionAxios(email, rawLink = null) {
     let axiosConfig = {
         headers: { 
@@ -21,11 +21,9 @@ async function alightMotionAxios(email, rawLink = null) {
             'X-Requested-With': 'XMLHttpRequest',
             'Origin': 'https://www.alightpro.my.id',
             'Referer': 'https://www.alightpro.my.id/'
-        },
-        timeout: 25000
+        }
     };
 
-    // Inject Proxy dari settings.js agar bisa menembus Region Block Cloudflare
     if (settings.PROXY_HOST && settings.PROXY_PORT) {
         const proxyUrl = `http://${settings.PROXY_HOST}:${settings.PROXY_PORT}`;
         axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
@@ -33,8 +31,12 @@ async function alightMotionAxios(email, rawLink = null) {
     }
 
     try {
-        // 1. Dapatkan Sesi Browser & Token
-        const sessionRes = await axios.get('https://www.alightpro.my.id/api/session', axiosConfig);
+        // Sistem Anti-Hang: Paksa putus koneksi jika Proxy mati/lelet lebih dari 10 detik
+        const fetchSession = () => axios.get('https://www.alightpro.my.id/api/session', { ...axiosConfig, timeout: 10000 });
+        const timeoutSession = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_PROXY')), 10000));
+        
+        const sessionRes = await Promise.race([fetchSession(), timeoutSession]);
+        
         const sessionData = sessionRes.data;
         const cookies = sessionRes.headers['set-cookie'] ? sessionRes.headers['set-cookie'].map(c => c.split(';')[0]).join('; ') : '';
 
@@ -45,13 +47,11 @@ async function alightMotionAxios(email, rawLink = null) {
         let pow = Date.now().toString();
         const difficulty = sessionData.difficulty || '0000';
         
-        // 2. Kalkulasi Bypass Anti-Bot (Proof of Work)
         for (let i = 0; i < 500000; i++) {
             const hash = crypto.createHash('sha256').update(prefix + i.toString()).digest('hex');
             if (hash.startsWith(difficulty)) { pow = i.toString(); break; }
         }
 
-        // 3. Tembak API
         let postConfig = { ...axiosConfig };
         postConfig.headers['Content-Type'] = 'application/json';
         postConfig.headers['X-Amprem-Token'] = sessionData.token;
@@ -62,16 +62,20 @@ async function alightMotionAxios(email, rawLink = null) {
         const payload = { action, email };
         if (rawLink) payload.link = rawLink;
 
-        const submitRes = await axios.post('https://www.alightpro.my.id/api/alight-motion', payload, postConfig);
+        // Sistem Anti-Hang untuk Post Data (Maks 15 Detik)
+        const fetchSubmit = () => axios.post('https://www.alightpro.my.id/api/alight-motion', payload, { ...postConfig, timeout: 15000 });
+        const timeoutSubmit = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_PROXY')), 15000));
+
+        const submitRes = await Promise.race([fetchSubmit(), timeoutSubmit]);
 
         return { success: submitRes.data.status === true, message: submitRes.data.msg || 'Aksi Berhasil!' };
     } catch (err) {
         let errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message;
         
-        if (errorMsg.includes("unavailable in your region") || errorMsg.includes("403 Forbidden")) {
-            errorMsg = "Terblokir Cloudflare. Wajib ganti IP Proxy Indonesia di settings.js!";
-        } else if (errorMsg.includes("ECONNRESET") || errorMsg.includes("timeout") || errorMsg.includes("socket hang up")) {
-            errorMsg = "Koneksi Proxy Mati/Terputus. Ganti IP Proxy!";
+        if (errorMsg === 'TIMEOUT_PROXY' || errorMsg.includes("ECONNRESET") || errorMsg.includes("socket hang up")) {
+            errorMsg = "Koneksi Proxy MATI atau SANGAT LAMBAT. Ganti IP Proxy di settings.js sekarang juga!";
+        } else if (errorMsg.includes("unavailable in your region") || errorMsg.includes("403 Forbidden") || errorMsg.includes("503")) {
+            errorMsg = "Terblokir Cloudflare! IP Proxy (atau IP VPS) kamu telah diblacklist oleh AlightPro.";
         }
         return { success: false, error: errorMsg };
     }
@@ -160,7 +164,7 @@ module.exports = (bot, readDB, writeDB) => {
         const sendRes = await alightMotionAxios(email, null);
         
         if (!sendRes.success) {
-            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\n\nDetail: <code>${sendRes.error}</code></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\n\nDetail: <code>${sendRes.error}</code>\n\n<i>*Jika error terkait Proxy, silakan ganti IP PROXY INDONESIA di settings.js dengan yang masih aktif!</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
         }
 
         // Simpan Sesi (Tunggu user mengirim link)
@@ -220,7 +224,7 @@ module.exports = (bot, readDB, writeDB) => {
                     bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${actRes.message}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 } else {
                     ampremCooldowns.delete(userId); 
-                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: <code>${actRes.error}</code></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: <code>${actRes.error}</code>\n\n<i>*Saran: Ganti Proxy di settings.js dengan IP yang masih aktif!</i></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 }
             } else {
                 bot.sendMessage(state.chatId, `<blockquote>${e.error} Itu bukan link verifikasi yang valid!\nSilakan kirim link Alight Motion atau ketik <code>/cancel</code>.</blockquote>`, {parse_mode: 'HTML'});
