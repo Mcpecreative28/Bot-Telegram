@@ -5,9 +5,9 @@ module.exports = {
     ID_TEMAN: "7459692708", 
 
     // Pengaturan Panel Server 1
-    DOMAIN1: '',
-    PLTA1: '',
-    PLTC1: '',
+    DOMAIN1: 'https://pterodactyl-free.hostkita.help',
+    PLTA1: 'ptla_Mcqe1gkBFMNxjmEiEC9pxueEb54UVKNIQnKaaWI1hbj',
+    PLTC1: 'ptlc_iB7IXHSjs6Lkx4SSH3RiGxsB7p4J3Xhl9kbdGl3hnxW',
     LOC1: 1,
 
     // Pengaturan Panel Server 2
