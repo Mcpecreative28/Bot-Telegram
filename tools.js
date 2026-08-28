@@ -1,6 +1,5 @@
 const axios = require('axios');
 const crypto = require('crypto');
-const { HttpsProxyAgent } = require('https-proxy-agent');
 const settings = require('./settings');
 const e = require('./emojis');
 
@@ -13,74 +12,83 @@ const ampremCooldowns = new Map();
 const ampremState = new Map(); 
 const COOLDOWN_TIME = 60000;
 
-// ================= ENGINE TUNGGAL: ALIGHTPRO NATIVE DENGAN STRICT TIMEOUT =================
-async function alightMotionAxios(email, rawLink = null) {
-    let axiosConfig = {
-        headers: { 
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+// ================= SCRAPER ALIGHTPRO V4 (BYPASS HUMAN PROOF V3) =================
+const ALIGHT_CONFIG = {
+    BASE_URL: 'https://www.alightpro.my.id',
+    SECRET: 'amprem-human-v3-secret-2026',
+    UA: 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36',
+    TIMEOUT: 20000
+};
+
+const sha256 = s => crypto.createHash('sha256').update(s).digest('hex');
+
+async function getAlightSession() {
+    const res = await axios.get(`${ALIGHT_CONFIG.BASE_URL}/api/session`, {
+        headers: {
             'X-Requested-With': 'XMLHttpRequest',
-            'Origin': 'https://www.alightpro.my.id',
-            'Referer': 'https://www.alightpro.my.id/'
-        }
-    };
+            'Cache-Control': 'no-store',
+            'User-Agent': ALIGHT_CONFIG.UA,
+            'Origin': ALIGHT_CONFIG.BASE_URL,
+            'Referer': ALIGHT_CONFIG.BASE_URL + '/',
+            'Accept': 'application/json'
+        },
+        timeout: ALIGHT_CONFIG.TIMEOUT
+    });
+    
+    const cookie = res.headers['set-cookie'] ? res.headers['set-cookie'][0].split(';')[0] : '';
+    const data = res.data;
+    if (!data.status || !data.token || !data.nonce) throw new Error('Session token/nonce tidak valid dari server AlightPro');
+    
+    return { ...data, cookie };
+}
 
-    if (settings.PROXY_HOST && settings.PROXY_PORT) {
-        const proxyUrl = `http://${settings.PROXY_HOST}:${settings.PROXY_PORT}`;
-        axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
-        axiosConfig.proxy = false; 
-    }
-
+async function solveAlightPro(action, email, link = null) {
     try {
-        // Sistem Anti-Hang: Paksa putus koneksi jika Proxy mati/lelet lebih dari 10 detik
-        const fetchSession = () => axios.get('https://www.alightpro.my.id/api/session', { ...axiosConfig, timeout: 10000 });
-        const timeoutSession = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_PROXY')), 10000));
+        const s = await getAlightSession();
         
-        const sessionRes = await Promise.race([fetchSession(), timeoutSession]);
+        // Kalkulasi delay bawaan V4
+        const delayMs = 2300 - (Date.now() - parseInt(s.timestamp, 10));
+        if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+
+        // Bypass Human Proof V3
+        const humanProof = sha256(`human:${s.sessionId}:${s.nonce}:${s.timestamp}:${email.toLowerCase()}:5:${ALIGHT_CONFIG.SECRET}`);
         
-        const sessionData = sessionRes.data;
-        const cookies = sessionRes.headers['set-cookie'] ? sessionRes.headers['set-cookie'].map(c => c.split(';')[0]).join('; ') : '';
-
-        if (!sessionData.status || !sessionData.token) throw new Error('Gagal mendapatkan sesi token dari server AlightPro.');
-
-        const action = rawLink ? 'verify' : 'send';
-        const prefix = `${sessionData.sessionId}:${sessionData.nonce}:${email.toLowerCase()}:${action}:`;
+        // Kalkulasi PoW
+        const base = `${s.sessionId}:${s.nonce}:${s.timestamp}:${email.toLowerCase()}:${action}:${humanProof}:`;
         let pow = Date.now().toString();
-        const difficulty = sessionData.difficulty || '0000';
+        const difficulty = s.difficulty || '0000';
         
         for (let i = 0; i < 500000; i++) {
-            const hash = crypto.createHash('sha256').update(prefix + i.toString()).digest('hex');
-            if (hash.startsWith(difficulty)) { pow = i.toString(); break; }
+            if (sha256(base + i).startsWith(difficulty)) { pow = i.toString(); break; }
         }
 
-        let postConfig = { ...axiosConfig };
-        postConfig.headers['Content-Type'] = 'application/json';
-        postConfig.headers['X-Amprem-Token'] = sessionData.token;
-        postConfig.headers['X-Amprem-Nonce'] = sessionData.nonce;
-        postConfig.headers['X-Amprem-Pow'] = pow;
-        postConfig.headers['Cookie'] = cookies;
+        const body = { action, email };
+        if (link) body.link = link;
 
-        const payload = { action, email };
-        if (rawLink) payload.link = rawLink;
+        const res = await axios.post(`${ALIGHT_CONFIG.BASE_URL}/api/alight-motion`, body, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Amprem-Token': s.token,
+                'X-Amprem-Nonce': s.nonce,
+                'X-Amprem-Pow': pow,
+                'X-Amprem-Human-Proof': humanProof,
+                'Cookie': s.cookie,
+                'User-Agent': ALIGHT_CONFIG.UA,
+                'Origin': ALIGHT_CONFIG.BASE_URL,
+                'Referer': ALIGHT_CONFIG.BASE_URL + '/',
+                'Accept': 'application/json'
+            },
+            timeout: ALIGHT_CONFIG.TIMEOUT
+        });
 
-        // Sistem Anti-Hang untuk Post Data (Maks 15 Detik)
-        const fetchSubmit = () => axios.post('https://www.alightpro.my.id/api/alight-motion', payload, { ...postConfig, timeout: 15000 });
-        const timeoutSubmit = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_PROXY')), 15000));
-
-        const submitRes = await Promise.race([fetchSubmit(), timeoutSubmit]);
-
-        return { success: submitRes.data.status === true, message: submitRes.data.msg || 'Aksi Berhasil!' };
+        return { success: res.data.status === true, data: res.data };
     } catch (err) {
-        let errorMsg = err.response?.data?.msg || err.response?.data?.error || err.message;
-        
-        if (errorMsg === 'TIMEOUT_PROXY' || errorMsg.includes("ECONNRESET") || errorMsg.includes("socket hang up")) {
-            errorMsg = "Koneksi Proxy MATI atau SANGAT LAMBAT. Ganti IP Proxy di settings.js sekarang juga!";
-        } else if (errorMsg.includes("unavailable in your region") || errorMsg.includes("403 Forbidden") || errorMsg.includes("503")) {
-            errorMsg = "Terblokir Cloudflare! IP Proxy (atau IP VPS) kamu telah diblacklist oleh AlightPro.";
-        }
-        return { success: false, error: errorMsg };
+        let errMsg = err.response?.data?.msg || err.response?.data?.error || err.message;
+        return { success: false, error: errMsg };
     }
 }
-// ====================================================================
+// ===============================================================================
 
 module.exports = (bot, readDB, writeDB) => {
     // FITUR 1: TEMPMAIL
@@ -147,7 +155,7 @@ module.exports = (bot, readDB, writeDB) => {
         const inputArgs = match[1];
 
         if (inputArgs && inputArgs.includes('http')) {
-            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan memicu link-nya secara otomatis.</blockquote>`, {parse_mode: 'HTML'});
+            return bot.sendMessage(chatId, `<blockquote>${e.error} JANGAN MENGIRIM LINK DI SINI!\nGunakan: <code>/amprem email@domain.com</code>\nBot akan meminta link-nya secara otomatis.</blockquote>`, {parse_mode: 'HTML'});
         }
 
         if (!inputArgs || !inputArgs.includes('@')) {
@@ -158,16 +166,15 @@ module.exports = (bot, readDB, writeDB) => {
 
         if (user.limit !== "UNLIMITED" && user.limit <= 0) return bot.sendMessage(chatId, `<blockquote>${e.error} Limit harian kamu sudah habis!</blockquote>`, {parse_mode: 'HTML'});
 
-        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MENYIAPKAN SESI ALIGHTPRO</b>\n\nMeminta server untuk mengirimkan Magic Link ke email...</blockquote>`, {parse_mode: 'HTML'});
+        let waitMsg = await bot.sendMessage(chatId, `<blockquote>${e.loading} <b>MENYIAPKAN SESI ALIGHTPRO</b>\n\nMeminta server untuk mengirimkan Magic Link ke email via Scraper V4...</blockquote>`, {parse_mode: 'HTML'});
 
-        // Memicu API AlightPro untuk mengirim email verifikasi (action = 'send')
-        const sendRes = await alightMotionAxios(email, null);
+        // Memicu API AlightPro V4 (action = 'send')
+        const sendRes = await solveAlightPro('send', email);
         
         if (!sendRes.success) {
-            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\n\nDetail: <code>${sendRes.error}</code>\n\n<i>*Jika error terkait Proxy, silakan ganti IP PROXY INDONESIA di settings.js dengan yang masih aktif!</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+            return bot.editMessageText(`<blockquote>${e.error} <b>GAGAL MEMICU EMAIL</b>\n\nDetail: <code>${sendRes.error}</code></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
         }
 
-        // Simpan Sesi (Tunggu user mengirim link)
         ampremState.set(userId, { email, chatId });
 
         bot.editMessageText(`<blockquote><b>${e.loading} MENUNGGU MAGIC LINK</b>\n\n${e.block_mid} Target: <code>${email}</code>\n${e.block_end} Status: Link Verifikasi telah dikirim ke email tersebut!\n\n<i>Tunggu link-nya muncul dari tempmail, lalu salin dan kirimkan link tersebut ke chat ini.\nKetik <code>/cancel</code> untuk membatalkan proses.</i></blockquote>`, {chat_id: chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
@@ -207,11 +214,11 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                 }
 
-                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Mengirim link ke AlightPro...</blockquote>`, {parse_mode: 'HTML'});
+                const waitMsg = await bot.sendMessage(state.chatId, `<blockquote>${e.loading} <b>MEMPROSES AKTIVASI LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Status: Mengirim link ke AlightPro V4...</blockquote>`, {parse_mode: 'HTML'});
                 ampremCooldowns.set(userId, Date.now());
 
-                // Eksekusi API AlightPro untuk verifikasi link (action = 'verify')
-                const actRes = await alightMotionAxios(userStateEmail, link);
+                // Eksekusi API AlightPro V4 (action = 'verify')
+                const actRes = await solveAlightPro('verify', userStateEmail, link);
 
                 if (actRes.success) {
                     db = readDB(); 
@@ -221,10 +228,11 @@ module.exports = (bot, readDB, writeDB) => {
                     }
                     let limitText = db[userId].limit === "UNLIMITED" ? "Unlimited" : `${db[userId].limit}/${settings.roleLimits[db[userId].role]}`;
                     
-                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${actRes.message}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    const resMsg = actRes.data.msg || 'Lisensi Berhasil Ditambahkan!';
+                    bot.editMessageText(`<blockquote><b>${e.succes} AMPREM BERHASIL DIBUAT!</b>\n\n${e.block_mid} Email: <code>${userStateEmail}</code>\n${e.block_mid} Info: ${resMsg}\n${e.block_end} Sisa Limit: <b>${limitText}</b></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 } else {
                     ampremCooldowns.delete(userId); 
-                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: <code>${actRes.error}</code>\n\n<i>*Saran: Ganti Proxy di settings.js dengan IP yang masih aktif!</i></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
+                    bot.editMessageText(`<blockquote>${e.error} <b>GAGAL PROSES LISENSI</b>\n\n${e.block_mid} Target: <code>${userStateEmail}</code>\n${e.block_end} Detail: <code>${actRes.error}</code></blockquote>`, {chat_id: state.chatId, message_id: waitMsg.message_id, parse_mode: 'HTML'});
                 }
             } else {
                 bot.sendMessage(state.chatId, `<blockquote>${e.error} Itu bukan link verifikasi yang valid!\nSilakan kirim link Alight Motion atau ketik <code>/cancel</code>.</blockquote>`, {parse_mode: 'HTML'});
